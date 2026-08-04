@@ -1,6 +1,11 @@
 import matplotlib.pyplot as plt
 import pybamm
 
+"""
+NOTICE: This script is an initial testing script to run the composite degradation model.
+Parameter set: Mayur2024 (Newly added).
+"""
+
 pybamm.set_logging_level('NOTICE')
 model = pybamm.lithium_ion.DFN(
     {
