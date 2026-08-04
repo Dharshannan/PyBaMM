@@ -95,9 +95,7 @@ plt.show()
 # Plot 2b: negative-electrode LAM split by phase (graphite vs silicon)
 # ================================
 LAM_gr = sol["Loss of active material in primary phase in negative electrode [%]"].entries
-LAM_si = sol[
-    "Loss of active material in secondary phase in negative electrode [%]"
-].entries
+LAM_si = sol["Loss of active material in secondary phase in negative electrode [%]"].entries
 plt.figure()
 plt.plot(Qt, LAM_gr, label="LAM graphite (primary)")
 plt.plot(Qt, LAM_si, label="LAM silicon (secondary)", linestyle="dashed")
