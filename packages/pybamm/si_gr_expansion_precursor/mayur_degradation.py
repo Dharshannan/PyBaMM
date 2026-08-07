@@ -16,7 +16,7 @@ model = pybamm.lithium_ion.DFN(
         "lithium plating": "partially reversible",
         "lithium plating porosity change": "true",  # alias for "SEI porosity change"
         "particle mechanics": ("swelling and cracking", "swelling only"),
-        "SEI on cracks": "false",
+        "SEI on cracks": "true",
         "loss of active material": "stress-driven",
     }
 )
@@ -56,29 +56,53 @@ sim = pybamm.Simulation(
 sol = sim.solve(initial_soc=1.0)
 
 # ================================
-# Plot 1
+# Plot 1  (now with SEI on cracks)
 # ================================
 Qt = sol["Throughput capacity [A.h]"].entries
 Q_SEI = sol["Loss of capacity to negative SEI [A.h]"].entries
+Q_SEI_cr = sol["Loss of capacity to negative SEI on cracks [A.h]"].entries  # NEW
 Q_plating = sol["Loss of capacity to negative lithium plating [A.h]"].entries
 Q_side = sol["Total capacity lost to side reactions [A.h]"].entries
-Q_LLI = (
-        sol["Total lithium lost [mol]"].entries * 96485.3 / 3600
-)  # convert from mol to A.h
+Q_LLI = sol["Total lithium lost [mol]"].entries * 96485.3 / 3600  # mol -> A.h
 plt.figure()
 plt.plot(Qt, Q_SEI, label="SEI", linestyle="dashed")
+plt.plot(Qt, Q_SEI_cr, label="SEI on cracks", linestyle="dashdot")  # NEW (its LLI)
 plt.plot(Qt, Q_plating, label="Li plating", linestyle="dotted")
 plt.plot(Qt, Q_side, label="All side reactions", linestyle=(0, (6, 1)))
 plt.plot(Qt, Q_LLI, label="All LLI")
 plt.xlabel("Throughput capacity [A.h]")
 plt.ylabel("Capacity loss [A.h]")
+plt.title("Capacity-loss breakdown (incl. SEI on cracks)")
 plt.legend()
 plt.show()
 
 # ================================
-# Plot 2
+# Plot 1b: SEI-on-cracks thickness growth (sanity check it's active)
 # ================================
-Qt = sol["Throughput capacity [A.h]"].entries
+plt.figure()
+for phase, ls in [("primary", "-"), ("secondary", "--")]:
+    try:
+        L_cr = sol[
+            f"X-averaged negative {phase} SEI on cracks thickness [m]"
+        ].entries
+        plt.plot(Qt, L_cr * 1e9, ls, label=f"SEI on cracks — {phase}")
+    except KeyError:
+        print(f"  [plot] no SEI-on-cracks thickness for {phase} phase")
+# reference: standard SEI thickness (primary) for scale
+try:
+    L_sei = sol["X-averaged negative primary total SEI thickness [m]"].entries
+    plt.plot(Qt, L_sei * 1e9, ":", color="gray", label="standard SEI (primary)")
+except KeyError:
+    pass
+plt.xlabel("Throughput capacity [A.h]")
+plt.ylabel("SEI thickness [nm]")
+plt.title("SEI-on-cracks thickness growth")
+plt.legend()
+plt.show()
+
+# ================================
+# Plot 2  (degradation modes — unchanged)
+# ================================
 LLI = sol["Loss of lithium inventory [%]"].entries
 LAM_neg = sol["Loss of active material in negative electrode [%]"].entries
 LAM_pos = sol["Loss of active material in positive electrode [%]"].entries
@@ -92,7 +116,7 @@ plt.legend()
 plt.show()
 
 # ================================
-# Plot 2b: negative-electrode LAM split by phase (graphite vs silicon)
+# Plot 2b: negative-electrode LAM split by phase (unchanged)
 # ================================
 LAM_gr = sol["Loss of active material in primary phase in negative electrode [%]"].entries
 LAM_si = sol["Loss of active material in secondary phase in negative electrode [%]"].entries
@@ -105,7 +129,7 @@ plt.legend()
 plt.show()
 
 # ================================
-# Plot 3
+# Plot 3  (porosity — unchanged)
 # ================================
 eps_neg_avg = sol["X-averaged negative electrode porosity"].entries
 eps_neg_sep = sol["Negative electrode porosity"].entries[-1, :]
@@ -116,5 +140,27 @@ plt.plot(Qt, eps_neg_sep, label="Separator", linestyle="dotted")
 plt.plot(Qt, eps_neg_CC, label="Current collector", linestyle="dashed")
 plt.xlabel("Throughput capacity [A.h]")
 plt.ylabel("Negative electrode porosity")
+plt.legend()
+plt.show()
+
+
+# monotonic-SEI sanity check (concentration = actual SEI amount)
+plt.figure()
+for phase, ls in [("primary", "-"), ("secondary", "--")]:
+    c = sol[f"X-averaged negative {phase} SEI on cracks concentration [mol.m-3]"].entries
+    plt.plot(Qt, c, ls, label=f"SEI-on-cracks conc — {phase}")
+plt.xlabel("Throughput capacity [A.h]"); plt.ylabel("SEI on cracks concentration [mol.m-3]")
+plt.legend()
+plt.title("SEI-on-cracks amount (should be monotonic)")
+plt.show()
+
+eps_gr, eps_si = 0.735, 0.015   # Primary/Secondary active material volume fractions
+plt.figure()
+c_gr = sol["X-averaged negative primary SEI on cracks concentration [mol.m-3]"].entries
+c_si = sol["X-averaged negative secondary SEI on cracks concentration [mol.m-3]"].entries
+plt.plot(Qt, c_gr / eps_gr, "-",  label="graphite (per unit active material)")
+plt.plot(Qt, c_si / eps_si, "--", label="silicon (per unit active material)")
+plt.xlabel("Throughput capacity [A.h]"); plt.ylabel("SEI-on-cracks conc / ε_s [mol.m-3]")
+plt.title("Crack-SEI intensity per unit active material")
 plt.legend()
 plt.show()

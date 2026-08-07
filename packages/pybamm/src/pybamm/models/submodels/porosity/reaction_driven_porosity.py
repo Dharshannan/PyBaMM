@@ -79,6 +79,13 @@ class ReactionDriven(BaseModel):
 
             domain_param = self.param.domain_params[domain.split()[0]]
             eps_k = domain_param.epsilon_init + delta_eps_k
+
+            # TODO: Uncomment here to activate porosity floor (more stable for solver but no knee)
+            # if domain != "separator":
+            #     eps_min = pybamm.Scalar(0.1)
+            #     k_eps = 100.0  # softplus sharpness
+            #     eps_k = pybamm.softplus(eps_k, eps_min, k_eps)
+
             eps_dict[domain] = eps_k
 
         variables = self._get_standard_porosity_variables(eps_dict)
