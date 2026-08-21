@@ -432,6 +432,47 @@ def silicon_volume_change_Ai2020(sto):
     return t_change
 
 
+# Measured silicon particle volume (V/V0, dimensionless) vs lithiation
+# stoichiometry, digitised from the SiC shell model (Jia Guo), supplied by
+# the user for si_gr_expansion. Loaded once at import time, matching the
+# established pattern used for graphite_ocp_Enertech_Ai2020's CSV data.
+path, _ = os.path.split(os.path.abspath(__file__))
+silicon_volume_vs_sto_lithiation_data = pybamm.parameters.process_1D_data(
+    "volume_vs_sto_lithiation.csv", path=path
+)
+
+
+def silicon_volume_change_JiaGuo(sto):
+    """
+    Silicon particle volume change as a function of lithiation stoichiometry,
+    interpolated from measured V/V0 data (SiC shell model, Jia Guo).
+
+    Note on convention: t_change is only ever used as a DIFFERENCE,
+    t_change(sto_now) - t_change(sto_init) (see
+    particle_mechanics/base_mechanics.py), so returning the raw V/V0 ratio
+    here (rather than rebasing to a strain V/V0 - 1 that is ~0 at sto=0,
+    the convention used by the analytic Ai2020/Bonkile2024 functions above)
+    gives an identical result for that difference -- the constant offset
+    cancels out. t_change is NOT used in the stress calculation itself
+    (that uses the separate "partial molar volume" scalar parameter), so
+    this only affects the reported/diagnostic electrode thickness change,
+    not the stress-driven degradation physics.
+
+    Parameters
+    ----------
+    sto: :class:`pybamm.Symbol`
+        Electrode stoichiometry, dimensionless
+        should be R-averaged particle concentration
+
+    Returns
+    -------
+    t_change:class:`pybamm.Symbol`
+        volume change (V/V0), dimensionless, normalised by particle volume
+    """
+    name, (x, y) = silicon_volume_vs_sto_lithiation_data
+    return pybamm.Interpolant(x, y, sto, name=name, interpolator="linear")
+
+
 def silicon_cracking_rate_Ai2020(T_dim):
     """
     Silicon particle cracking rate as a function of temperature. Same Paris' law
@@ -722,6 +763,18 @@ def get_parameter_values():
     SEI parameters are example parameters for composite SEI on silicon/graphite. Both
     phases use the same values, from the paper :footcite:t:`Yang2017`.
 
+    si_gr_expansion is a derivative of Mayur2024: identical in every other
+    respect, but the silicon (secondary) particle volume-change function is
+    replaced with a measured V/V0-vs-stoichiometry curve (interpolated from
+    volume_vs_sto_lithiation.csv, digitised from the SiC shell model, Jia
+    Guo) instead of the analytic linear Ai2020/Bonkile2024 model. Graphite
+    (primary) keeps its existing Ai2020 volume-change function unchanged.
+    Since the volume-change function only feeds the reported/diagnostic
+    electrode thickness-change output (not the stress equations, which use
+    a separate constant partial-molar-volume parameter), this does not
+    alter the stress-driven degradation physics -- it only makes the
+    reported particle/electrode expansion physically realistic.
+
     .. note::
         This parameter set does not claim to be representative of the true parameter
         values. Instead these are parameter values assembled to run composite-electrode
@@ -822,6 +875,29 @@ def get_parameter_values():
         "Primary: Negative electrode OCP [V]": graphite_ocp_Enertech_Ai2020,
         "Negative electrode porosity": 0.25,
         "Negative electrode porosity floor": 0.08,
+        # Pore-buffering (volume partition) parameters. f_transmit_min =
+        # k_BoL = 0.7 (assumed BoL transfer ratio) is a hard BoL constant --
+        # since eps_struct(BoL) = eps_init (0.245) is far above eps_min_
+        # transfer + eps_transfer_width below, the model sits in the
+        # "maximal buffering" plateau at BoL regardless of the transition
+        # width, so f(BoL) = f0 exactly. eps_min_transfer/eps_transfer_width
+        # were originally set (as eps_min_transfer/eps_max_transfer, see
+        # CHANGES.md item 9 for why that framing was dropped) to a
+        # literature-informed placeholder (0.12, band up to eps_init=0.25)
+        # but that made buffering saturate around throughput ~580 A.h, well
+        # before the capacity knee (~800 A.h) -- producing a smooth
+        # BoL-onward rise in expansion amplitude rather than the
+        # flat-then-sharp-rise-at-the-knee "hump" pattern seen in reference
+        # experimental dilatometry (si_gr_expansion_precursor/
+        # test_pore_buffering/eps_max_transfer_sweep_v2_result.png). Retuned
+        # via eps_max_transfer_sweep.py (band-position sweep) to a narrow
+        # closure porosity + width -- which times the buffering-saturation
+        # transition to coincide with the knee (knee at ~81% SoH, close to
+        # the original recipe's 82% target). Still an empirically-tuned
+        # shape match, not a measured value -- see CHANGES.md items 7-9.
+        "Negative electrode pore buffering closure porosity": 0.08,
+        "Negative electrode pore buffering transition width": 0.01,
+        "Negative electrode transmitted fraction plateau": 0.7,
         "Primary: Negative electrode active material volume fraction": 0.735,
         "Primary: Negative particle radius [m]": 5.86e-06,
         "Negative electrode Bruggeman coefficient (electrolyte)": 1.5,
@@ -871,7 +947,7 @@ def get_parameter_values():
         "Secondary: Negative electrode reference concentration for free of deformation "
         "[mol.m-3]": 0.0,
         "Secondary: Negative electrode partial molar volume [m3.mol-1]": 1.2e-05,
-        "Secondary: Negative electrode volume change": silicon_volume_change_Ai2020,
+        "Secondary: Negative electrode volume change": silicon_volume_change_JiaGuo,
         "Secondary: Negative electrode initial crack length [m]": 2e-08,
         "Secondary: Negative electrode initial crack width [m]": 1.5e-08,
         "Secondary: Negative electrode number of cracks per unit area [m-2]": 3.18e15,
@@ -906,7 +982,20 @@ def get_parameter_values():
         "Positive electrode Young's modulus [Pa]": 375000000000.0,
         "Positive electrode reference concentration for free of deformation [mol.m-3]"
         "": 0.0,
-        "Positive electrode partial molar volume [m3.mol-1]": 1.25e-05,
+        # Reduced from Mayur2024's inherited default (1.25e-05) -- that value
+        # gives ~79% particle volume change over the full stoichiometry
+        # window via volume_change_Ai2020 (Omega*c_s_max*sto), wildly larger
+        # than real NMC/layered-oxide cathodes (near-flat/negligible
+        # expansion per experimental dilatometry -- see
+        # si_gr_expansion_precursor/CHANGES.md item 5's k=delta_cell/
+        # delta_particle discussion). Retuned to give ~10% max particle
+        # volume change instead, matching the observed experimental ceiling.
+        # This also feeds the positive electrode's stress equations (Omega
+        # is shared between the thickness-change diagnostic and
+        # base_mechanics.py's stress_t_surf/disp_surf), so it can shift the
+        # cathode's own stress-driven LAM slightly -- re-verify the knee
+        # position after changing this.
+        "Positive electrode partial molar volume [m3.mol-1]": 1.584686e-06,
         "Positive electrode volume change": volume_change_Ai2020,
         "Positive electrode initial crack length [m]": 2e-08,
         "Positive electrode initial crack width [m]": 1.5e-08,

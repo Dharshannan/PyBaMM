@@ -231,6 +231,25 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 Sets the model to include a single active particle size or a
                 distribution of sizes at any macroscale location. Can be "single"
                 (default) or "distribution". Option applies to both electrodes.
+            * "pore buffering" : str
+                Whether to partition active-material swelling between pore-volume
+                buffering and electrode thickness change (negative electrode only),
+                instead of routing all swelling to thickness. Can be "false"
+                (default, original behaviour) or "true". Requires "SEI porosity
+                change" or "lithium plating porosity change" to be "true" (the
+                partition is implemented inside the reaction-driven porosity
+                submodel).
+            * "pore buffering transition" : str
+                Only used when "pore buffering" is "true". Selects the functional
+                form of the transmitted fraction f(eps_struct) that partitions
+                swelling between pore buffering and thickness. Can be "tanh"
+                (default) -- a semi-empirical smooth sigmoid blend, centred at
+                "eps_min_transfer" + "eps_transfer_width", between the "maximal
+                buffering" plateau and "pores closed" -- or "physical" -- a
+                compliance-ratio form f = 1/(1 + K*C_pore(eps)) derived from a
+                pore-network/stack stiffness balance, where C_pore(eps) is a
+                smooth, saturating function of structural porosity with decay
+                length "eps_transfer_width".
             * "SEI" : str
                 Set the SEI submodel to be used. Options are:
 
@@ -402,6 +421,8 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "particle phases": ["1", "2"],
             "particle shape": ["spherical", "no particles"],
             "particle size": ["single", "distribution"],
+            "pore buffering": ["false", "true"],
+            "pore buffering transition": ["tanh", "physical"],
             "SEI": [
                 "none",
                 "constant",
@@ -465,6 +486,8 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "particle phases": "1",
             "particle shape": "spherical",
             "particle size": "single",
+            "pore buffering": "false",
+            "pore buffering transition": "tanh",
             "SEI": "none",
             "SEI film resistance": "none",
             "SEI on cracks": "false",
@@ -738,6 +761,17 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 f"Cannot use '{options['operating mode']}' operating mode with "
                 "'voltage as a state' set to 'false'. Explicit power and "
                 "resistance control require voltage as an algebraic state."
+            )
+
+        if options["pore buffering"] == "true" and (
+            options["SEI porosity change"] == "false"
+            and options["lithium plating porosity change"] == "false"
+        ):
+            raise pybamm.OptionError(
+                "'pore buffering' set to 'true' requires 'SEI porosity change' or "
+                "'lithium plating porosity change' to be 'true' -- pore buffering "
+                "is implemented inside the reaction-driven porosity submodel, which "
+                "is only built when one of those is enabled."
             )
 
         # Options not yet compatible with particle-size distributions

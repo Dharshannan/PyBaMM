@@ -484,6 +484,7 @@ def get_parameter_values():
         "Positive particle diffusivity [m2.s-1]": graphite_diffusivity_Ecker2015,
         "Positive electrode OCP [V]": graphite_ocp_Ecker2015,
         "Positive electrode porosity": 0.329,
+        "Positive electrode porosity floor": 0.08,
         "Positive electrode active material volume fraction": 0.372403,
         "Positive particle radius [m]": 1.37e-05,
         "Positive electrode Bruggeman coefficient (electrolyte)": 1.6372789338386007,

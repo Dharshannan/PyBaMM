@@ -131,8 +131,30 @@ class SEIGrowth(BaseModel):
             alpha_SEI = 0.5
 
         if SEI_option.startswith("reaction limited"):
-            # Scott Marquis thesis (eq. 5.92)
-            j_sei = -phase_param.j0_sei * pybamm.exp(-alpha_SEI * F_RT * eta_SEI)
+            # Scott Marquis thesis (eq. 5.92), with a smooth cap on the
+            # exponent -- same saturating-function idea as the porosity floor
+            # in porosity/reaction_driven_porosity.py, applied here to the
+            # exponent rather than a state value (j_sei is an algebraic/
+            # derived quantity, not a state bound via self.rhs, so no
+            # raw-vs-published split is needed like the eps_solid fix
+            # required). For |exponent| << exponent_max this reduces to
+            # tanh(x) ~= x, i.e. essentially the original unbounded law, so
+            # normal/accelerating SEI growth is preserved; it only engages
+            # once eta_SEI swings extreme (e.g. at a large current
+            # step-change), which is what caused IDA_ERR_FAIL/IDA_CONV_FAIL
+            # solver failures without this cap.
+            exponent = -alpha_SEI * F_RT * eta_SEI
+            # exponent_max is now a real parameter ("{Primary/Secondary}: SEI
+            # reaction exponent cap", default 11.0) instead of a hardcoded
+            # constant, so it can be swept like any other lever. Higher
+            # values let j_sei grow faster before saturating (sharper
+            # post-knee acceleration) at the cost of solver robustness;
+            # too high causes a near-vertical cliff instead of a controlled
+            # knee (10 recovers/flattens post-knee, 13 overshoots into a
+            # cliff -- see sweep scripts for the physical range).
+            exponent_max = phase_param.exponent_max_sei
+            capped_exponent = exponent_max * pybamm.tanh(exponent / exponent_max)
+            j_sei = -phase_param.j0_sei * pybamm.exp(capped_exponent)
 
         elif SEI_option == "electron-migration limited":
             # Scott Marquis thesis (eq. 5.94)

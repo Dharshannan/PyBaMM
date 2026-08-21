@@ -1,0 +1,1 @@
+- [Conda env for running scripts](project_conda_env.md) — use PyBaMM_Pressure env's python, not base anaconda, or local repo edits (e.g. si_gr_expansion) won't be picked up.

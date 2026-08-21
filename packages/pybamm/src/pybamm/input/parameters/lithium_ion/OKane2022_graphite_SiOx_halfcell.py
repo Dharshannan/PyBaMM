@@ -456,6 +456,7 @@ def get_parameter_values():
         "Positive particle diffusivity [m2.s-1]": graphite_LGM50_diffusivity_Chen2020,
         "Positive electrode OCP [V]": graphite_LGM50_ocp_Chen2020,
         "Positive electrode porosity": 0.25,
+        "Positive electrode porosity floor": 0.08,
         "Positive electrode active material volume fraction": 0.75,
         "Positive particle radius [m]": 5.86e-06,
         "Positive electrode Bruggeman coefficient (electrolyte)": 1.5,

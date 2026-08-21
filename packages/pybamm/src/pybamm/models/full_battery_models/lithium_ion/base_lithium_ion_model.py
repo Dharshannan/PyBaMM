@@ -42,9 +42,18 @@ class BaseModel(pybamm.BaseBatteryModel):
 
     def set_submodels(self, build):
         self.set_external_circuit_submodel()
-        self.set_porosity_submodel()
         self.set_interface_utilisation_submodel()
         self.set_crack_submodel()
+        # Porosity is built after particle mechanics (moved from before
+        # set_interface_utilisation_submodel/set_crack_submodel) so that, when
+        # options["pore buffering"] == "true", the reaction-driven porosity
+        # submodel can read the per-phase electrode thickness-change variables
+        # particle mechanics just computed and partition them into pore
+        # buffering vs. thickness before any transport submodel consumes
+        # porosity. Safe when the option is off too: ReactionDriven doesn't
+        # read those variables in that case, and nothing between the old and
+        # new position consumes porosity.
+        self.set_porosity_submodel()
         self.set_active_material_submodel()
         self.set_transport_efficiency_submodels()
         self.set_convection_submodel()

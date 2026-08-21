@@ -112,8 +112,14 @@ class CrackPropagation(BaseMechanics):
         else:
             l_cr = variables[f"{Domain} {phase_name}particle crack length [m]"]
         # # compressive stress will not lead to crack propagation
-        dK_SIF = stress_t_surf * b_cr * pybamm.sqrt(np.pi * l_cr) * (stress_t_surf >= 0)
-        dl_cr = k_cr * (dK_SIF**m_cr) / 3600  # divide by 3600 to replace t0_cr
+        # dK_SIF = stress_t_surf * b_cr * pybamm.sqrt(np.pi * l_cr) * (stress_t_surf >= 0)
+        # dl_cr = k_cr * (dK_SIF**m_cr) / 3600  # divide by 3600 to replace t0_cr
+        # TODO: Anti-Paris law update below (uncomment below, and use above for full Paris-Law):
+        R_typ = self.phase_param.R_typ
+        stress_relief = pybamm.maximum(1 - l_cr / R_typ, 0)
+        stress_eff = stress_t_surf * stress_relief
+        dK_SIF = stress_eff * b_cr * pybamm.sqrt(np.pi * l_cr) * (stress_eff >= 0)
+        dl_cr = k_cr * (dK_SIF ** m_cr) / 3600
         variables.update(
             {
                 f"{Domain} {phase_name}particle cracking rate [m.s-1]": dl_cr,

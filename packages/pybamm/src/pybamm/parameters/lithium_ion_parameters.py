@@ -290,6 +290,37 @@ class DomainLithiumIonParameters(BaseParameters):
                     "Vertical distance (z) [m]": z,
                 },
             )
+            self.epsilon_min = pybamm.Parameter(f"{Domain} electrode porosity floor")
+            # Pore-buffering (volume partition) parameters. Distinct from
+            # epsilon_min above: epsilon_min is a numerical/SEI-growth solver
+            # floor, while these describe the mechanical pore-network
+            # percolation/closure behaviour that partitions active-material
+            # swelling between pore-volume buffering and electrode thickness
+            # change. Only referenced when options["pore buffering"] == "true".
+            #
+            # eps_min_transfer is the closure/percolation porosity (still a
+            # genuine physical reference point). There is deliberately no
+            # "eps_max_transfer" parameter: an early version used
+            # (eps_min_transfer, eps_max_transfer) mirroring the notes' Eq.
+            # 18 three-regime f(eps), but once tuned so the transition times
+            # against the capacity knee, eps_init ends up far above
+            # eps_max_transfer -- the cell never actually occupies the
+            # "shared" regime near BoL as Eq. 18 assumes, it starts already
+            # deep in the plateau regime. eps_max_transfer's only real role
+            # had become "eps_min_transfer + a width", so it's named that
+            # directly instead: eps_transfer_width sets how much additional
+            # porosity loss (above eps_min_transfer) the smooth transition
+            # (tanh or physical) spans, not a literal regime boundary the
+            # cell crosses partway through life. See CHANGES.md item 9.
+            self.eps_min_transfer = pybamm.Parameter(
+                f"{Domain} electrode pore buffering closure porosity"
+            )
+            self.eps_transfer_width = pybamm.Parameter(
+                f"{Domain} electrode pore buffering transition width"
+            )
+            self.f_transmit_min = pybamm.Parameter(
+                f"{Domain} electrode transmitted fraction plateau"
+            )
             epsilon_s_tot = sum(phase.epsilon_s for phase in self.phase_params.values())
             self.epsilon_inactive = 1 - self.epsilon_init - epsilon_s_tot
 
@@ -383,6 +414,7 @@ class ParticleLithiumIonParameters(BaseParameters):
         self.j0_sei = pybamm.Parameter(
             f"{pref}SEI reaction exchange current density [A.m-2]"
         )
+        self.exponent_max_sei = pybamm.Parameter(f"{pref}SEI reaction exponent cap")
 
         self.R_sei = pybamm.Parameter(f"{pref}SEI resistivity [Ohm.m]")
         self.D_sol = pybamm.Parameter(f"{pref}SEI solvent diffusivity [m2.s-1]")
