@@ -491,7 +491,7 @@ explanation for this specific pre-hump puzzle.
 An updated, more complete experimental figure supersedes the 4-condition reading in A.1
 below — source file: `fig2_population_lead_time_v2.png` (same folder as this plan).
 
-![Population lead-time figure: panel a shows discharge capacity and reversible expansion vs. EFC for 5 conditions (baseline, low pressure, high C-rate, high temperature, narrow SoC window) with lead/knee EFC annotated; panel b overlays all conditions aligned to EFC-EFC_knee; panel c summarises lead EFC by category; panel d shows a combined high-rate + narrow-SoC-window condition.](fig2_population_lead_time_v2.png)
+![Population lead-time figure: panel a shows discharge capacity and reversible expansion vs. EFC for 5 conditions (baseline, low pressure, high C-rate, high temperature, narrow SoC window) with lead/knee EFC annotated; panel b overlays all conditions aligned to EFC-EFC_knee; panel c summarises lead EFC by category; panel d shows a combined high-rate + narrow-SoC-window condition.](pouch_cell_064/fig2_population_lead_time_v2.png)
 
 **Panel a** adds a **fifth condition** (a narrower voltage/SoC window, 3.15–4.12 V vs. the
 2.6–4.2 V baseline) to the original four, with precise lead/knee EFC now readable directly
