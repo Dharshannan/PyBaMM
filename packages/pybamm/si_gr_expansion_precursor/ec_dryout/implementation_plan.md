@@ -1014,12 +1014,123 @@ cycle, cf. paper Fig. A-3(d-f)/A-6) in this folder.
 
 ---
 
-## 7. Folder layout (current)
+## 7. `sei_ec_coupling`: extending the wrapper to "ec reaction limited" SEI kinetics
+
+**Motivation.** Section 4/6 above validated the wrapper against
+`"SEI": "solvent-diffusion limited"` only (`j_sei = -F*D_sol*c_sol/L_sei`,
+Marquis thesis eq. 5.91 — a *pure* diffusion law, no reaction-kinetic term
+at all). That's a deliberate, known property of this submodel, not
+something to fix: as `c_sol` falls under dry-out, `j_sei` falls
+proportionally, with nothing else in the expression to offset it — a
+purely self-limiting/negative-feedback process. Useful for isolating and
+validating the dry-out *mechanism* in isolation (section 6's whole
+purpose), but it means a cell run under this submodel alone cannot show
+an accelerating-into-a-knee capacity trajectory driven by SEI growth
+itself — this project's tuned recipes get their knee from the *separate*
+stress-driven LAM/cracking pathway, not from SEI growth's own dynamics
+under `"solvent-diffusion limited"`.
+
+For `degradation_test_matrix_plan.md`'s dry-out rows to show genuine,
+SEI-driven knee behaviour (not just a LAM-driven one with dry-out along
+for the ride), the wrapper needed to support an SEI submodel that (a) has
+real reaction kinetics that can accelerate as resistance grows — the same
+qualitative character as `"reaction limited"`'s `j_sei =
+-j0_sei*exp(...)` law — while (b) still exposing *some* genuine
+concentration-type parameter the wrapper's R_EC mechanism can act on.
+Plain `"reaction limited"` fails (b) outright: its rate expression
+(`sei_growth.py`, `SEI_option.startswith("reaction limited")` branch) is
+purely a function of overpotential/exchange-current-density, with no
+concentration term of any kind — there is nothing for a dry-out mechanism
+to attach to without inventing new core-model physics, which was
+explicitly ruled out ("implement changes into the wrapper, not the core
+scripts").
+
+**Resolution: `"ec reaction limited"` (Yang et al. 2017), already fully
+implemented in vanilla PyBaMM — zero core-model changes needed.**
+Read directly from `sei_growth.py`'s `SEI_option.startswith("ec reaction
+limited")` branch: a self-consistent linear solve for the interfacial
+current `j` and the local EC surface concentration, combining a
+Butler-Volmer-style REACTION-rate term (`k_exp = k_sei *
+exp(-alpha_SEI*F_RT*eta_SEI)` — genuinely overpotential/resistance-driven,
+satisfying (a)) in series with EC diffusion to the reaction site
+(satisfying (b), via the `c_ec_0` parameter — PyBaMM key `"{pref}EC
+initial concentration in electrolyte [mol.m-3]"`,
+`lithium_ion_parameters.py:446-448`). This sits functionally *between*
+`"reaction limited"` and `"solvent-diffusion limited"` — exactly the
+missing middle ground B.3 (in `../expansion_precursor_test_plan.md`)
+anticipated might need "its own small design pass" — except it turns out
+to already exist upstream, needing no design pass at all, only wrapper
+wiring.
+
+**si_gr_expansion.py already parameterises this option for both phases**
+(confirmed by reading the source, not assumed): `"{Primary,Secondary}: EC
+initial concentration in electrolyte [mol.m-3]"` (4541.0),
+`"{Primary,Secondary}: EC diffusivity [m2.s-1]"` (2e-18), `"{Primary,
+Secondary}: SEI kinetic rate constant [m.s-1]"` (1e-12) are all present
+in the default parameter dict (`si_gr_expansion.py:824-826`, `:841-843`)
+— likely inherited/unused defaults, never exercised by this project's own
+tuning work, but present and usable as a starting point. Recalibrating
+these against the tuned recipe's knee-timing/expansion targets (analogous
+to how `j0_sei` was scaled by `SI_MULT`/`GR_DIV` for `"reaction
+limited"`) is tracked as a separate, later concern in
+`degradation_test_matrix_plan.md` §1a — not part of this wrapper change.
+
+**What changed in `ec_dryout_wrapper.py` (wrapper only, no `src/pybamm`
+changes)**:
+- New module-level `_ec_concentration_param_name(pref, sei_ec_coupling)`
+  helper — the one thing that differs between the two modes is which
+  literal parameter key receives the ledger's evolving EC-concentration
+  value each batch; the mass-balance mechanics (EC consumption
+  stoichiometry, pore-volume tracking, reservoir refill, R_dry/R_Li) are
+  completely unchanged and shared between both modes.
+- `ECDryoutLedger.__init__` and `run_ec_dryout_degradation` both gained a
+  new `sei_ec_coupling` parameter, `"solvent_diffusion"` (default,
+  preserves every previously-validated behaviour and output exactly —
+  confirmed no other line changed) or `"ec_reaction"`.
+- `"ec_reaction"` mode writes `"{pref}EC initial concentration in
+  electrolyte [mol.m-3]"` instead of `"{pref}Bulk solvent concentration
+  [mol.m-3]"`, for both `"Primary:"`/`"Secondary:"` (composite) using the
+  same single shared EC-pool value, matching the existing composite
+  convention.
+- Smoke-tested end-to-end against `si_gr_expansion` (`"SEI": "ec reaction
+  limited"`, composite, pore buffering on, `sei_ec_coupling="ec_reaction"`):
+  10 cycles, 2 ledger updates, `c_EC` genuinely evolved
+  (4541 → 3300.0 → 2643.2 mol/m³) with no exceptions — confirms the wiring
+  is live, not silently inert. This is plumbing verification only, **not**
+  the Phase 1c validation sweep (`r_eres` differentiation, knee-timing
+  and expansion-hump effects) `degradation_test_matrix_plan.md` still
+  calls for.
+
+## 9. Bug fix: `sei_capacity_loss_Ah` was missing the "SEI on cracks" EC-consumption pathway
+
+Found while building `degradation_test_matrix/test_dry_out/ec_reaction_limited_dryout_
+coupling_test.py` (the first real dry-out coupling attempt against a composite,
+`"SEI on cracks": "true"` recipe). `sei_capacity_loss_Ah` — the function `ECDryoutLedger`
+uses each batch to compute `dn_EC` (EC consumed, Eq. 1's 1:1:1 Li:EC:e- stoichiometry) —
+only summed `"Loss of capacity to negative {primary,secondary} SEI [A.h]"` (bulk SEI). But
+`base_lithium_ion_model.py`'s `set_default_summary_variables` also declares a SEPARATE
+`"Loss of capacity to negative {primary,secondary} SEI on cracks [A.h]"` per phase —
+crack-surface SEI growth, driven by the same `j_sei` reaction, and therefore an EC-
+consuming pathway too. Every `degradation_test_matrix` recipe runs `"SEI on cracks":
+"true"`, so this silently under-counted total EC consumption (hence under-counted dry-out
+severity) whenever cracking was active — not a design choice, an oversight.
+
+**Fix** (in `ec_dryout_wrapper.py`, wrapper-only): `sei_capacity_loss_Ah` now also adds the
+`"...SEI on cracks [A.h]"` term(s), via a new `_cracks_sei_capacity_loss_Ah` helper that
+looks the variable up with a `try/except KeyError -> 0.0` fallback — so configurations
+where that variable isn't built at all (e.g. `ruihe_dryout_validation.py`'s OKane2022 setup,
+which never sets `"particle mechanics"`) are completely unaffected; confirmed by inspection
+that its `MODEL_OPTIONS` never enables particle mechanics, so the cracks term there is
+always the fallback 0. No change to the R_dry/R_Li/area-scale mechanics themselves — only
+the `dn_EC` input they're computed from is now more complete.
+
+## 10. Folder layout (current)
 
 ```
 si_gr_expansion_precursor/ec_dryout/
     implementation_plan.md               <- this file
-    ec_dryout_wrapper.py                  <- implemented, validated (section 6)
+    ec_dryout_wrapper.py                  <- implemented, validated (section 6), EC mass-
+                                              balance completeness fix (section 9)
     spike_li_rescale.py                   <- passing regression test for the R_Li mechanism;
                                               re-run after any PyBaMM upgrade
     ruihe_dryout_validation.py            <- baseline vs. 0%/6%/9% r_eres comparison,
@@ -1027,6 +1138,9 @@ si_gr_expansion_precursor/ec_dryout/
     ruihe_dryout_validation_fig3.png      <- output of the above (cf. paper Fig. 3(a-c))
     ruihe_dryout_validation_ratios.png    <- output of the above (cf. paper Fig. A-3(d-f)/A-6)
 ```
+
+See also `../degradation_test_matrix/test_dry_out/` for the first coupling of this wrapper
+to the project's own tuned `"ec reaction limited"` recipe (Phase 1a/1b).
 
 Future work (not needed for the wrapper itself): re-run
 `ruihe_dryout_validation.py` with a much larger `MAX_TOTAL_CYCLES` (or a
