@@ -575,7 +575,110 @@ class ParticleLithiumIonParameters(BaseParameters):
         self.beta_LAM_sei = pybamm.Parameter(
             f"{pref}{Domain} electrode reaction-driven LAM factor [m3.mol-1]"
         )
-
+        # Porosity-gated reaction-driven LAM factor -- only referenced when
+        # "loss of active material" includes "porosity isolation" (see
+        # loss_active_material.py's get_coupled_variables); a second,
+        # independent magnitude from beta_LAM_sei so the two can be tuned
+        # separately (small beta_LAM_sei pre-knee, beta_LAM_iso ramping up
+        # only as porosity approaches its floor). Units [s-1.m-1] (v7c
+        # reformulation: multiplies SEI THICKNESS [m], not a current
+        # density -- see the isolation term's own doc-comment for why).
+        self.beta_LAM_iso = pybamm.Parameter(
+            f"{pref}{Domain} electrode porosity-isolation LAM factor [s-1.m-1]"
+        )
+        # Sharpness of the porosity-isolation gate's ramp near the floor
+        # (isolation_gate = (1-headroom_frac)**eta_LAM_iso) -- higher values
+        # concentrate the ramp into a narrower band right at the floor
+        # (sharper knee); lower values spread it over more of life (softer,
+        # wider knee). Also only referenced when "porosity isolation" is in
+        # the LAM option.
+        self.eta_LAM_iso = pybamm.Parameter(
+            f"{pref}{Domain} electrode porosity-isolation LAM exponent"
+        )
+        # Relaxation time constant [s] for the porosity-isolation gate
+        # STATE (see loss_active_material.py's isolation-gate-lag doc-
+        # comment): the gate now relaxes toward its algebraic target
+        # (isolation_gate_target, a function of instantaneous porosity)
+        # with this timescale, rather than tracking it instantaneously.
+        # Only referenced when "porosity isolation" is in the LAM option.
+        self.tau_LAM_iso = pybamm.Parameter(
+            f"{pref}{Domain} electrode porosity-isolation gate time constant [s]"
+        )
+        # Redirect-to-LAM yield [dimensionless]: only referenced when
+        # "SEI reaction redirect to LAM" is "true" -- see
+        # loss_active_material.py's redirect branch and sei_growth.py's
+        # matching gate on dcdt_sei. Converts the fraction of SEI reaction
+        # current redirected away from SEI film growth (moles of lithium
+        # per unit time that would have formed new SEI) into an
+        # active-material volume loss rate; 1.0 is the simplest
+        # "one mole of foregone SEI lithium consumption corresponds to one
+        # mole of active material's worth of Si lost" interpretation.
+        self.redirect_LAM_yield = pybamm.Parameter(
+            f"{pref}{Domain} electrode SEI-redirect-to-LAM yield"
+        )
+        # Item 25 (OCP aging deformation): CELL064's own composite-anode eSOH
+        # fit (Si_Gr_Expansion_Precursor/Pouch_Data, "Managing silicon
+        # burn-out via onboard material diagnostics", S2590116825000232)
+        # extracts a per-RPT silicon-OCP deformation U_si_new = s_V*U_si_base
+        # + U_off (manuscript symbols), fit independently at every RPT
+        # alongside the usual x0/x100 stoichiometry windows. For CELL064:
+        # s_V = 0.967(RPT1), 0.956(RPT2), 0.992(RPT4), 0.838(RPT5) -- a sharp
+        # ADDITIONAL collapse specifically between RPT4 and RPT5, i.e. post-
+        # knee, on top of the BOL deformation already baked into this
+        # project's silicon OCP CSV (which encodes RPT1's own s_V/U_off).
+        # This is a genuinely different degradation channel from stoichiometric
+        # window shrinkage (LAM/LLI): the OCP curve's own SHAPE/amplitude
+        # flattens ("burn-out") as silicon degrades, not just the window it's
+        # evaluated over. These two parameters are the ADDITIONAL end-of-life
+        # scale/shift (relative to the BOL-deformed curve already used),
+        # applied as a function of this phase's OWN LAM fraction (1 -
+        # eps_solid/eps_solid_BOL), not the porosity-isolation gate state --
+        # that gate is deliberately slow-relaxing (large tau_LAM_iso) so a
+        # small sustained value integrates into large cumulative LAM growth,
+        # which makes it numerically negligible as an instantaneous OCP
+        # multiplier even once LAM itself is large -- see
+        # base_ocp.py's _apply_ocp_aging_deformation. Only referenced when
+        # "open-circuit potential aging deformation" is "true"; defaults
+        # (1.0, 0.0) are a no-op for full backward compatibility.
+        self.ocp_aging_deform_scale = pybamm.Parameter(
+            f"{pref}{Domain} electrode OCP aging-deformation end scale"
+        )
+        self.ocp_aging_deform_shift = pybamm.Parameter(
+            f"{pref}{Domain} electrode OCP aging-deformation end shift [V]"
+        )
+        # Item 29 (volume-change aging deformation): CELL064's own Si
+        # expansion fit (Si_Gr_Expansion_Precursor/Pouch_Data/cell064_data,
+        # L/L0 = 1 + 3*sto^exponent, joint_estimation.py's
+        # si_thickness_ratio_powerlaw) refits this exponent at every RPT,
+        # same as item 25's s_V/U_off: 1.56(RPT1) -> 1.85(RPT2) ->
+        # 2.88(RPT4, peak near the knee) -> 2.19(RPT5) -- a genuine,
+        # CELL064-specific evolution of the expansion curve's SHAPE across
+        # life (more back-loaded/convex as the cell ages), distinct from
+        # item 25's OCP deformation. t_change() is used ONLY as a difference
+        # for the reported "Cell thickness change [m]" (see
+        # silicon_volume_change_JiaGuo's own doc-comment) -- NOT in the
+        # stress/degradation physics -- so this is a low-risk, purely-
+        # diagnostic-output change. Weighted by this phase's OWN LAM
+        # fraction (not the porosity-isolation gate state -- same reasoning
+        # as item 25: the gate is slow-relaxing/near-zero most of the time,
+        # LAM fraction is the bounded, near-zero-pre-knee/saturating
+        # progress variable that actually works). Only referenced when
+        # "volume change aging deformation" is "true"; default exponent_end
+        # = exponent_bol is a no-op for full backward compatibility.
+        self.volume_change_deform_exponent_bol = pybamm.Parameter(
+            f"{pref}{Domain} electrode volume change aging-deformation BOL exponent"
+        )
+        self.volume_change_deform_exponent_end = pybamm.Parameter(
+            f"{pref}{Domain} electrode volume change aging-deformation end exponent"
+        )
+        # Item 30 (LAM expansion residual fraction), reinstated 2026-09-19 --
+        # see base_mechanics.py's doc comment at its point of use. Only
+        # referenced when "active material expansion residual" is "true";
+        # default 0.0 is a no-op (eps_s_eff = eps_s) for full backward
+        # compatibility.
+        self.lam_expansion_residual_fraction = pybamm.Parameter(
+            f"{pref}{Domain} electrode LAM expansion residual fraction"
+        )
         # Mechanical parameters
         self.c_0 = pybamm.Parameter(
             f"{pref}{Domain} electrode reference concentration for free of deformation "

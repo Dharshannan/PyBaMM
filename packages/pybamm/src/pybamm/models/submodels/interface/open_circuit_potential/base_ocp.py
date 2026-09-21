@@ -64,6 +64,66 @@ class BaseOpenCircuitPotential(BaseInterface):
                 }
             )
 
+    def _apply_ocp_aging_deformation(self, variables, ocp_surf, ocp_bulk):
+        """Item 25: aging-dependent OCP deformation (U_new = scale*U_base +
+        shift), ramped by this phase's own LAM FRACTION (1 - eps_solid /
+        eps_solid_BOL, clipped to [0, 1]) -- see lithium_ion_parameters.py's
+        ocp_aging_deform_scale/shift doc-comment for the CELL064/manuscript
+        motivation. NOT tied to the porosity-isolation gate STATE: that gate
+        is deliberately slow-relaxing (tau_LAM_iso can be ~1e8 s) so that a
+        small, SUSTAINED gate value integrates into large cumulative LAM
+        growth over the whole simulated life -- but the OCP deformation is
+        an INSTANTANEOUS multiplier, not a cumulative one, so tying it to the
+        same near-zero-most-of-the-time gate value made it numerically
+        negligible even at RPT5 despite LAM_Si correctly reaching ~80% there
+        (confirmed empirically: switching from the gate to the LAM fraction
+        below was needed after the gate-based version moved voltage RMSE by
+        <0.001 V). LAM fraction is exactly the "how far along is this phase's
+        degradation" progress variable already validated against real
+        LAM_Si data, so it's the natural weight for a mechanism ("burn-out")
+        that time-integrated LAM growth also represents.
+        Only active when this phase's LAM option includes "porosity" (scopes
+        this to phases the redirect/isolation mechanism already applies to,
+        so ocp_aging_deform_scale/shift only need defining for those) and the
+        global option is "true"; returns (ocp_surf, ocp_bulk) unchanged
+        otherwise, so fully backward-compatible. Shared by every OCP submodel
+        variant (single, hysteresis, ...) rather than duplicated in each.
+        """
+        if self.reaction != "lithium-ion main":
+            return ocp_surf, ocp_bulk
+        domain, Domain = self.domain_Domain
+        lam_option = getattr(getattr(self.options, domain), self.phase)[
+            "loss of active material"
+        ]
+        if (
+            self.options["open-circuit potential aging deformation"] != "true"
+            or "porosity" not in lam_option
+        ):
+            return ocp_surf, ocp_bulk
+
+        phase_name = self.phase_name
+        end_scale = self.phase_param.ocp_aging_deform_scale
+        end_shift = self.phase_param.ocp_aging_deform_shift
+        eps_solid_init = self.phase_param.epsilon_s
+
+        eps_solid_surf = variables[
+            f"{Domain} electrode {phase_name}active material volume fraction"
+        ]
+        lam_frac_surf = pybamm.minimum(
+            pybamm.maximum(1 - eps_solid_surf / eps_solid_init, 0), 1
+        )
+        ocp_surf = ocp_surf + lam_frac_surf * ((end_scale - 1) * ocp_surf + end_shift)
+
+        eps_solid_bulk = variables[
+            f"X-averaged {domain} electrode {phase_name}active material volume fraction"
+        ]
+        lam_frac_bulk = pybamm.minimum(
+            pybamm.maximum(1 - eps_solid_bulk / eps_solid_init, 0), 1
+        )
+        ocp_bulk = ocp_bulk + lam_frac_bulk * ((end_scale - 1) * ocp_bulk + end_shift)
+
+        return ocp_surf, ocp_bulk
+
     def _get_standard_ocp_variables(self, ocp_surf, ocp_bulk, dUdT):
         domain, Domain = self.domain_Domain
         reaction_name = self.reaction_name

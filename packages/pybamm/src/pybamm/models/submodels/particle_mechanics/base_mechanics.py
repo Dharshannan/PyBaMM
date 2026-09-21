@@ -284,10 +284,68 @@ class BaseMechanics(pybamm.BaseSubModel):
         E = pybamm.r_average(phase_param.E(sto, T))
         sto_init = pybamm.r_average(phase_param.c_init / phase_param.c_max)
 
-        # Compute volume change for thickness calculation
-        v_change = pybamm.x_average(
-            eps_s * phase_param.t_change(sto_rav)
-        ) - pybamm.x_average(eps_s * phase_param.t_change(sto_init))
+        # Compute volume change for thickness calculation. t_change is used
+        # only as a difference (t_change(sto_now) - t_change(sto_init)), so
+        # everything below affects only the reported "Cell thickness change
+        # [m]", not the stress calculation (which uses the separate Omega/
+        # partial molar volume parameter above).
+        lam_option = getattr(getattr(self.options, domain), self.phase)[
+            "loss of active material"
+        ]
+        lam_scoped = "porosity" in lam_option
+        eps_s_init_scalar = phase_param.epsilon_s
+
+        # Item 30 (eps_s residual fraction), reinstated 2026-09-19: assumes a
+        # fixed fraction of the material LOST from eps_s still contributes to
+        # the volume-change signal as though it were cycling with the
+        # remaining active fraction -- i.e. isolation doesn't remove a
+        # particle's expansion contribution entirely, just attenuates it.
+        # (Tried once before, removed in favour of item 31 -- frozen isolated
+        # volume tracking, which integrates the actual sto at the moment of
+        # isolation instead. Item 31 gave zero improvement on the ptp
+        # (peak-to-peak) expansion metric because its state accumulates too
+        # slowly/monotonically within one cycle to show up in a WITHIN-CYCLE
+        # peak-to-peak measurement -- it only affects absolute/baseline
+        # thickness level, which isn't what's being fit. Item 30 doesn't have
+        # that problem: it scales the SAME per-cycle-varying eps_s*t_change
+        # signal, so it directly boosts ptp. Reinstated now to test in
+        # combination with the Si diffusivity fix, since on its own it only
+        # addressed the secondary eps_s-collapse factor while the dominant
+        # sto-range-collapse factor -- suspected to be a diffusion-
+        # polarisation artifact from an unfitted Si diffusivity -- swamped
+        # it; if the diffusivity fix resolves the dominant factor, this
+        # residual-fraction term may now contribute much more visibly.)
+        if self.options["active material expansion residual"] == "true" and lam_scoped:
+            residual_frac = phase_param.lam_expansion_residual_fraction
+            eps_s_eff = eps_s + residual_frac * (eps_s_init_scalar - eps_s)
+        else:
+            eps_s_eff = eps_s
+
+        # Item 29: aging-dependent deformation of the volume-change POWER-LAW
+        # EXPONENT (t_change = 1 + 3*sto^exponent, matching CELL064's own Si
+        # expansion fit convention), weighted by this phase's own LAM
+        # fraction -- see lithium_ion_parameters.py's
+        # volume_change_deform_exponent_bol/end doc-comment. Falls back to
+        # the phase's own literature t_change() when off, fully backward
+        # compatible. Both items are scoped to phases with "porosity" in
+        # their LAM option (same as item 25) and compose independently --
+        # either, both, or neither may be active.
+        if self.options["volume change aging deformation"] == "true" and lam_scoped:
+            exp_bol = phase_param.volume_change_deform_exponent_bol
+            exp_end = phase_param.volume_change_deform_exponent_end
+            lam_frac = pybamm.minimum(
+                pybamm.maximum(1 - eps_s / eps_s_init_scalar, 0), 1
+            )
+            exponent_eff = exp_bol + lam_frac * (exp_end - exp_bol)
+            t_change_now = 1 + 3 * sto_rav**exponent_eff
+            t_change_init = 1 + 3 * sto_init**exponent_eff
+        else:
+            t_change_now = phase_param.t_change(sto_rav)
+            t_change_init = phase_param.t_change(sto_init)
+
+        v_change = pybamm.x_average(eps_s_eff * t_change_now) - pybamm.x_average(
+            eps_s_eff * t_change_init
+        )
 
         electrode_thickness_change = (
             self.param.n_electrodes_parallel * v_change * self.domain_param.L

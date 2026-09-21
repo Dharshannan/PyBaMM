@@ -219,7 +219,27 @@ class SEIGrowth(BaseModel):
             #  j = -F * c_0* k_exp() / (1 + L * k_exp() / D)
             #  c_ec = c_0 - L * k_exp() / D / (1 + L * k_exp() / D)
             #       = c_0 / (1 + L * k_exp() / D)
-            k_exp = phase_param.k_sei * pybamm.exp(-alpha_SEI * F_RT * eta_SEI)
+            #
+            # j_sei is mathematically bounded even as k_exp -> infinity (it
+            # saturates at the diffusion-limited value -F*c_0*D_ec/L_sei,
+            # since L_over_D*k_exp dominates both the numerator and
+            # denominator), but k_exp itself is not: if eta_SEI swings very
+            # negative (plausible right where porosity approaches its floor
+            # and local overpotential spikes -- see the reaction-limited
+            # branch above, which already got this same fix and cap, for
+            # exactly the IDA_ERR_FAIL/IDA_CONV_FAIL failures documented in
+            # ../../../../../si_gr_expansion_precursor/pouch_cell_064/
+            # degradation_test_matrix/cell064_degradation_fit.py's TUNING
+            # STATUS), exp(-alpha_SEI*F_RT*eta_SEI) can numerically overflow
+            # to inf, turning the mathematically-finite j_sei into an
+            # inf/inf NaN in floating point. Apply the same smooth
+            # (tanh-based) cap to the exponent here -- for
+            # |exponent|<<exponent_max this is ~identical to the uncapped
+            # law (tanh(x)~=x), only engaging once eta_SEI swings extreme.
+            exponent = -alpha_SEI * F_RT * eta_SEI
+            exponent_max = phase_param.exponent_max_sei
+            capped_exponent = exponent_max * pybamm.tanh(exponent / exponent_max)
+            k_exp = phase_param.k_sei * pybamm.exp(capped_exponent)
             L_over_D = L_sei / phase_param.D_ec
             c_0 = phase_param.c_ec_0
             j_sei = -self.param.F * c_0 * k_exp / (1 + L_over_D * k_exp)
@@ -299,6 +319,39 @@ class SEIGrowth(BaseModel):
         # 1/z_sei converts from Li moles to SEI moles (z_sei=Li mol per sei mol)
         # a * j_sei / (F * z_sei) = rate of consumption of SEI moles by SEI reaction
         dcdt_sei = a * j_sei / (self.param.F * self.phase_param.z_sei)
+
+        # Redirect-to-LAM (item 23): when enabled (and this phase's LAM
+        # option includes porosity isolation), a growing fraction of the
+        # reaction current -- gated by the SAME porosity-isolation gate
+        # state driving that phase's isolation LAM term in
+        # loss_active_material.py -- stops forming new SEI film (hence
+        # stops becoming new LLI) and is instead redirected into active-
+        # material loss there. Conserves total reaction current: this is a
+        # reduction of dcdt_sei, not an independent addition, so it needs
+        # no re-tuning of the SEI kinetic rate constant to avoid double-
+        # counting lithium consumption. Only ever active for phases that
+        # both opt in via options and actually have the isolation gate
+        # state (created by loss_active_material.py's "porosity isolation"
+        # LAM option) available.
+        lam_option = getattr(getattr(self.options, domain), self.phase)[
+            "loss of active material"
+        ]
+        if (
+            self.options["SEI reaction redirect to LAM"] == "true"
+            and "porosity" in lam_option
+        ):
+            if self.reaction_loc == "x-average":
+                isolation_gate = variables[
+                    f"X-averaged {domain} electrode {self.phase_name}"
+                    "porosity-isolation gate state"
+                ]
+            else:
+                isolation_gate = variables[
+                    f"{Domain} electrode {self.phase_name}"
+                    "porosity-isolation gate state"
+                ]
+            dcdt_sei = dcdt_sei * (1 - isolation_gate)
+
         # Therefore, -a * j_sei / (F * z_sei) = rate of creation of SEI moles
         self.rhs = {c_sei: -dcdt_sei}
 

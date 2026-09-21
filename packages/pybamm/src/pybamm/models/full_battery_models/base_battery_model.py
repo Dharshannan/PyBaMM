@@ -164,6 +164,80 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 provided for different behaviour in negative and positive electrodes.
             * "interface utilisation": str
                 Can be "full" (default), "constant", or "current-driven".
+            * "SEI reaction redirect to LAM" : str
+                Can be "false" (default) or "true". When "true" and "loss of
+                active material" includes "porosity isolation" for a phase,
+                redirects a growing fraction (the same porosity-isolation
+                gate state driving that phase's isolation LAM term) of the
+                SEI reaction current away from ongoing SEI film growth
+                (hence away from that lithium's usual fate of becoming LLI)
+                and into active-material loss instead, conserving total
+                reaction current rather than adding a second, independent
+                consumption channel on top of unchanged SEI growth -- CELL064
+                investigation item 23: every attempt to reduce post-knee LLI
+                by scaling SEI-kinetics parameters down (and re-centering the
+                knee via a compensating porosity-BOL shift) reproduced the
+                same post-knee LLI growth RATE relative to knee-relative
+                time, just delayed -- consistent with LLI growth never
+                actually slowing down after the knee, only starting later.
+                This lets SEI growth (and hence new LLI) genuinely taper
+                toward zero post-knee while the same current continues
+                accumulating as LAM instead.
+            * "open-circuit potential aging deformation" : str
+                Can be "false" (default) or "true". When "true" and "loss of
+                active material" includes "porosity isolation" for a phase,
+                deforms that phase's open-circuit potential curve itself
+                (U_new = scale*U_base + shift) as a function of that phase's
+                own LAM fraction (1 - eps_solid/eps_solid_BOL, NOT the
+                porosity-isolation gate state -- that gate is deliberately
+                slow-relaxing so a small sustained value integrates into
+                large cumulative LAM growth, which makes it numerically
+                negligible as an INSTANTANEOUS OCP multiplier even when LAM
+                itself has grown large), ramping from the undeformed curve
+                (LAM fraction=0) to the phase's "OCP aging-deformation end
+                scale/shift" parameters (LAM fraction=1) -- CELL064
+                investigation item 25: this
+                cell's own composite-anode eSOH fit (fit independently at
+                every RPT) shows silicon's OCP curve itself collapsing in
+                amplitude (not just its operating stoichiometry window
+                narrowing) sharply between RPT4 and RPT5, i.e. specifically
+                post-knee -- a genuinely different degradation channel
+                ("silicon burn-out") from LAM/LLI, absent from the model when
+                this option is "false" (a single fixed OCP curve for the
+                whole simulated life).
+            * "volume change aging deformation" : str
+                Can be "false" (default) or "true". When "true" and "loss of
+                active material" includes "porosity isolation" for a phase,
+                deforms that phase's volume-change (t_change) power-law
+                exponent as a function of that phase's own LAM fraction (see
+                "open-circuit potential aging deformation" for why LAM
+                fraction rather than the porosity-isolation gate state),
+                ramping from "...volume change aging-deformation BOL
+                exponent" (LAM fraction=0) to "...end exponent" (LAM
+                fraction=1) -- CELL064 investigation item 29: this cell's
+                own Si expansion fit (L/L0 = 1 + 3*sto^exponent, fit
+                independently at every RPT) shows the exponent evolving
+                substantially across life (1.56 -> 2.88 near the knee ->
+                2.19), a genuine shape change in the expansion curve
+                distinct from item 25's OCP deformation. t_change() only
+                feeds the reported "Cell thickness change [m]", not the
+                stress/degradation physics, so this is a low-risk,
+                diagnostic-output-only change.
+            * "active material expansion residual" : str
+                Can be "false" (default) or "true". When "true" and "loss of
+                active material" includes "porosity isolation" for a phase,
+                a fixed fraction ("...LAM expansion residual fraction") of
+                the active volume fraction lost to isolation still
+                contributes to that phase's volume-change signal, as
+                ``eps_s_eff = eps_s + residual_frac * (eps_s_init - eps_s)``
+                used in place of raw ``eps_s`` when computing v_change --
+                i.e. isolated material is assumed to keep expanding/
+                contracting in step with the remaining active fraction
+                rather than freezing or vanishing entirely. CELL064
+                investigation item 30: physically motivated by isolated
+                silicon still holding intercalated lithium and its already-
+                expanded volume. Only affects the reported "Cell thickness
+                change [m]", not the stress/degradation physics.
             * "lithium plating" : str
                 Sets the model for lithium plating. Can be "none" (default),
                 "reversible", "partially reversible", or "irreversible".
@@ -173,8 +247,14 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             * "loss of active material" : str
                 Sets the model for loss of active material. Can be "none" (default),
                 "stress-driven", "asymmetric stress-driven", "reaction-driven",
-                "current-driven", "stress and reaction-driven", or
-                "asymmetric stress and reaction-driven".
+                "current-driven", "stress and reaction-driven",
+                "asymmetric stress and reaction-driven", or
+                "stress and reaction-driven and porosity isolation" (adds a second,
+                porosity-gated reaction-driven LAM term that ramps from ~0 at the
+                electrode's as-set-up porosity to its full rate as porosity
+                approaches its floor -- CELL064's `test_pathways` investigation, for
+                a Si-LAM channel that stays small pre-knee and grows sharply once
+                pore volume/electrolyte transport becomes limiting post-knee).
                 A 2-tuple can be provided for different behaviour in negative and
                 positive electrodes.
             * "number of MSMR reactions" : str
@@ -375,6 +455,10 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 "MSMR",
             ],
             "interface utilisation": ["full", "constant", "current-driven"],
+            "SEI reaction redirect to LAM": ["false", "true"],
+            "open-circuit potential aging deformation": ["false", "true"],
+            "volume change aging deformation": ["false", "true"],
+            "active material expansion residual": ["false", "true"],
             "lithium plating": [
                 "none",
                 "reversible",
@@ -390,6 +474,8 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 "current-driven",
                 "stress and reaction-driven",
                 "asymmetric stress and reaction-driven",
+                "stress and reaction-driven and porosity isolation",
+                "stress-driven and porosity isolation",
             ],
             "number of MSMR reactions": ["none"],
             "open-circuit potential": [
@@ -475,6 +561,10 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "hydrolysis": "false",
             "intercalation kinetics": "symmetric Butler-Volmer",
             "interface utilisation": "full",
+            "SEI reaction redirect to LAM": "false",
+            "open-circuit potential aging deformation": "false",
+            "volume change aging deformation": "false",
+            "active material expansion residual": "false",
             "lithium plating": "none",
             "lithium plating porosity change": "false",
             "loss of active material": "none",

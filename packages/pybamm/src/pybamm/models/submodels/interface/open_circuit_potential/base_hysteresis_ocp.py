@@ -151,6 +151,10 @@ class BaseHysteresisOpenCircuitPotential(BaseOpenCircuitPotential):
             ocp_bulk = (1 + h_s_av) / 2 * U_delith_bulk + (1 - h_s_av) / 2 * U_lith_bulk
             dUdT = self.phase_param.dUdT(sto_surf)
 
+            ocp_surf, ocp_bulk = self._apply_ocp_aging_deformation(
+                variables, ocp_surf, ocp_bulk
+            )
+
         variables.update(self._get_standard_ocp_variables(ocp_surf, ocp_bulk, dUdT))
         return variables
 

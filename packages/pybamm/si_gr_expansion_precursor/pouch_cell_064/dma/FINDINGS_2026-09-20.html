@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CELL064 Degradation Model — Key Findings (2026-09-20)</title>
+<style>
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1a1a1a; line-height: 1.5; max-width: 980px; margin: 0 auto; padding: 30px 40px; }
+  h1 { font-size: 22px; border-bottom: 3px solid #2c3e50; padding-bottom: 8px; }
+  h2 { font-size: 18px; color: #2c3e50; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 40px; page-break-before: always; }
+  h2:first-of-type { page-break-before: avoid; }
+  h3 { font-size: 15px; color: #34495e; margin-top: 24px; }
+  code, pre { font-family: Consolas, "Courier New", monospace; }
+  pre { background: #f4f4f4; border: 1px solid #ddd; border-radius: 4px; padding: 10px 14px; font-size: 12.5px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+  code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 12.5px; word-break: break-word; overflow-wrap: anywhere; }
+  table { border-collapse: collapse; margin: 14px 0; width: 100%; font-size: 12.5px; }
+  th, td { border: 1px solid #bbb; padding: 5px 9px; text-align: right; }
+  th { background: #2c3e50; color: white; }
+  td:first-child, th:first-child { text-align: left; }
+  img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; margin: 10px 0; display: block; }
+  .caption { font-size: 12px; color: #555; font-style: italic; margin-top: -4px; margin-bottom: 16px; }
+  .scope { background: #eef4fb; border-left: 4px solid #2c7be5; padding: 12px 16px; font-size: 13.5px; overflow-wrap: break-word; }
+  .figrow { display: flex; gap: 12px; flex-wrap: wrap; }
+  .figrow img { flex: 1 1 45%; }
+  .figstack img { width: 100%; }
+  ul, ol { font-size: 14px; }
+  p, li { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>CELL064 Degradation Model — Key Findings (2026-09-20)</h1>
+
+<div class="scope">
+<b>Scope:</b> three findings from the CELL064 (GMFEB23S NMC622/Si-Gr pouch cell)
+PyBaMM degradation-model investigation, covering (1) why DMA-consistent
+LLI/LAM scaling matters for RPT-shape fidelity, (2) the post-knee
+porosity-gated SEI-induced isolation mechanism that drives LAM, and (3) why
+the Beginning-of-Life (BoL) solid-diffusion parameterization (Si particle
+radius and diffusivity) controls whether the model's End-of-Life (EoL)
+stoichiometric range matches reality.
+<br><br>
+All model/code references are to <code>packages/pybamm/src/pybamm/models/submodels/</code>
+(core PyBaMM) and
+<code>packages/pybamm/si_gr_expansion_precursor/pouch_cell_064/degradation_test_matrix/cell064_degradation_fit.py</code>
+(the CELL064-specific fit driver), current as of this session.
+<br><br>
+<br><br>
+<b>Note: "old baseline" means something different in Finding 1 vs. Finding 3</b>,
+since each isolates a different mechanism:
+<ul>
+<li><b>Finding 1's old baseline</b> = the canonical, pre-session CELL064 fit
+  (<code>cell064_overall_summary_result.png</code>, dated 2026-09-14) — the
+  actual run that motivated this whole investigation into increasing Si
+  LAM in the first place. Its LAM_Si reaches only ~28% by EFC~230, well
+  below the real DMA-derived values (58% at EFC~172, 80% at EFC~197). Its
+  exact parameter set turned out to be reconstructable despite predating
+  raw-curve saving and having no saved snapshot (an untracked,
+  iteratively-tuned script) — the README documents "item 19 final: run07"
+  as six specific parameters (<code>C64_K_SEI_MULT=1.0e-3</code>,
+  <code>C64_NEG_POROSITY_FLOOR=0.023</code>,
+  <code>C64_EXPONENT_MAX_SEI=100</code>, <code>C64_LAM_PROP_MULT=0.6</code>,
+  <code>C64_SI_BETA_LAM_SEI=7e-6</code>, BoL porosity 0.25), and all six are
+  still the script's own literal current defaults, so running with zero
+  overrides reconstructs it directly. One stability fix was needed: the
+  documented floor (0.023) now hits a solver failure (<code>IDA_BAD_K</code>)
+  shortly post-knee — something in the shared submodel code has shifted the
+  numerically-safe margin since 2026-09-14 (this session's own later work
+  independently needed 0.035 for similar reasons). Raising the floor to
+  0.028 (plus <code>MAX_CYCLES</code> 250-&gt;350, also documented in the
+  README as needed to bring RPT4/RPT5 back into range) reproduces the
+  documented knee EFC of 107.7 exactly and completes with a natural
+  SoH-floor stop rather than crashing.</li>
+<li><b>Finding 3's old baseline</b> = a specific, exactly-reproducible
+  config used throughout this session's early diffusivity diagnostics: Si
+  LAM WITH the porosity-gated isolation mechanism turned ON
+  (<code>SI_BETA_LAM_ISO=1.0</code>, redirect-to-LAM active, BoL porosity
+  0.13, <code>SI_K_SEI_MULT=6e-4</code>/<code>GR_K_SEI_MULT=1.25e-5</code>,
+  pore-buffering F0=0.7/width=0.05), but Si particle radius/diffusivity/
+  exchange-current all still at their literature (never-fitted) values.
+  Finding 3 is specifically about the diffusion-bottleneck effect that
+  only shows up <i>once</i> LAM is already severe enough to concentrate
+  current density on the remaining active Si.</li>
+</ul>
+<b>"New baseline"</b> (used in both findings) = the config adopted at
+the end of this session: Si particle radius x0.2, diffusivity x3, BoL
+porosity 0.17, <code>SI_K_SEI_MULT=3e-4</code>/<code>GR_K_SEI_MULT=6e-6</code>, pore-buffering
+F0=0.7/width=0.03 (isolation mechanism ON, same as Finding 3's old
+baseline, so in Finding 3 ONLY the diffusion-related parameters differ
+between old and new).
+</div>
+
+<h2>Finding 1: DMA-consistent LLI/LAM scaling is critical for RPT4/RPT5 shape fidelity</h2>
+
+<p>The model's total capacity fade at any point in life is the sum of two
+independent degradation modes: <b>LLI</b> (lithium inventory lost to SEI/side
+reactions) and <b>LAM</b> (active material lost, mainly Si via the porosity-
+isolation mechanism, Finding 2). A given total SoH can be reached by very
+different LLI/LAM <i>splits</i> — and the split matters far beyond the aggregate
+SoH number, because LLI and LAM shift the discharge curve's <i>shape</i>
+differently:</p>
+<ul>
+<li><b>LLI</b> shifts the whole anode/cathode stoichiometry window relative to
+  each other (a lithium-inventory problem) — it mostly shifts the discharge
+  curve along the voltage axis and shortens it roughly proportionally.</li>
+<li><b>LAM</b> (specifically Si LAM) removes an entire <i>phase's</i> contribution to
+  the composite anode's OCP and capacity — it changes the discharge curve's
+  <i>shape</i>, not just its length, because the remaining electrode is a
+  different (more graphite-dominated) composite than before.</li>
+</ul>
+
+<p>The <b>old baseline</b> had proportionally more LLI than Si LAM relative to
+what the real CELL064 DMA/eSOH fits show (<code>CELL064_LAM_derived.csv</code>:
+real LAM_Si reaches 58.5% by RPT4/EFC~171 and 79.6% by RPT5/EFC~197 — a
+large, dominant contribution). With too little LAM_Si and too much LLI, the
+old baseline's RPT4/RPT5 discharge curves end up shaped more like a
+lithium-inventory-limited curve than the real, LAM-Si-dominated one —
+visible directly as a shape mismatch (not just a magnitude mismatch) in
+both the raw V(Q) curve and its dV/dQ signature (dV/dQ is far more
+shape-sensitive than V(Q) itself, since it amplifies curvature differences
+that are hard to see by eye on the raw discharge curve).</p>
+
+<p>The <b>new baseline</b> re-tunes <code>SI_K_SEI_MULT</code>/<code>GR_K_SEI_MULT</code>/BoL porosity
+together (see Findings 2 and 3) so the model's LLI/LAM_Si split tracks the
+real DMA-derived split much more closely across life, not just the
+aggregate SoH-vs-EFC curve.</p>
+
+<p><b>Update:</b> the old baseline's exact config turned out to be
+reconstructable after all (see the note above) — <code>build_true_old_baseline.py</code>
+reproduces it with zero env var overrides plus one debugged stability fix
+(<code>NEG_POROSITY_FLOOR</code> 0.023-&gt;0.028, <code>MAX_CYCLES</code>
+250-&gt;350), reproducing the documented knee EFC of 107.7 exactly and
+reaching a natural stop rather than crashing. This makes a genuine 3-way
+(real / true old / new) comparison possible for the RPT4/RPT5 curves.</p>
+
+<div class="figstack">
+<img src="../degradation_test_matrix/cell064_overall_summary_result_true_old_baseline.png">
+<div class="caption">Old baseline (stability-fixed reconstruction of the 2026-09-14 config): full summary panel, now WITH the real discharge curve overlaid on the "Discharge voltage vs. RPT" panel (dashed = real, matched to all 4 real RPTs) — the same treatment the new baseline already has (that panel's real overlay is a feature added after the original 2026-09-14 run, so the as-originally-generated file predates it; this reconstruction uses current code and picks it up automatically). LAM_Si visibly undershoots the real DMA points.</div>
+<img src="../degradation_test_matrix/cell064_overall_summary_result_pbuf2_f0p7_w0p03.png">
+<div class="caption">New baseline: same summary panel — LAM_Si tracks the real points much more closely.</div>
+</div>
+
+<img src="final_rpt45_voltage_3way.png">
+<div class="caption">RPT4 and RPT5 discharge V(Q): real vs. true old baseline vs. new baseline, all three genuinely overlaid. The new baseline's curve <i>shape</i> (the mid-depth knee/bend around 60-90% of the discharge) tracks real's curvature noticeably better than the old baseline's — though it now terminates slightly before real at both RPTs, a separate, already-tracked capacity-fade-timing gap.</div>
+
+<img src="final_rpt45_dvdq_3way.png">
+<div class="caption">dV/dQ for the same three curves. The old baseline shows a distinctive double-dip (Q=0.2-0.6) absent from the real curve; the new baseline tracks the real curve's smoother shape through that region.</div>
+
+<h2>Finding 2: post-knee LAM comes from porosity-gated, SEI-induced isolation</h2>
+
+<h3>Mechanism, in words</h3>
+<p>Silicon's large volume swing on lithiation/delithiation, combined with SEI
+growth on cracked/exposed surface, progressively closes the negative
+electrode's pore network. As porosity falls, at some point remaining
+electrolyte-filled pathways become so constricted that pockets of active
+material lose electronic/ionic access — they become electrically isolated
+and stop contributing to charge/discharge, i.e. Loss of Active Material
+(LAM). This is modelled as a <i>gate</i> — a smooth, porosity-headroom-dependent
+function — that ramps a fraction of the ongoing SEI-forming reaction
+current from "counts toward SEI growth/LLI" to "counts toward LAM instead",
+staying small pre-knee (deliberately, so it doesn't perturb the
+already-tuned pre-knee fit) and growing sharply as the electrode's porosity
+approaches its floor (post-knee).</p>
+
+<h3>Equations</h3>
+<p>Implemented in
+<code>src/pybamm/models/submodels/active_material/loss_active_material.py</code>
+(<code>get_coupled_variables</code>, active whenever a phase's <code>"loss of active
+material"</code> option string contains <code>"porosity"</code>, e.g. Si's
+<code>"reaction-driven and porosity isolation"</code>):</p>
+
+<p><b>1. Porosity headroom fraction</b> (1 at as-built porosity, 0 at the floor):</p>
+<p style="font-size:16px; text-align:center;">
+f<sub>headroom</sub> = clamp<big>(</big> (ε<sub>n</sub> − ε<sub>n,floor</sub>) / (ε<sub>n,0</sub> − ε<sub>n,floor</sub>) , 0, 1 <big>)</big>
+</p>
+<pre>headroom_frac = clip((eps_n - eps_floor) / (eps_n0 - eps_floor), 0, 1)</pre>
+<p>where ε<sub>n</sub> (<code>eps_n</code>) is the electrode's current (structural) porosity, ε<sub>n,0</sub>
+(<code>eps_n0</code>) its as-set-up (BoL) value, ε<sub>n,floor</sub> (<code>eps_floor</code>) the parameterised porosity floor
+(<code>"Negative electrode porosity floor"</code>).</p>
+
+<p><b>2. Isolation-gate target</b> (algebraic, porosity-dependent):</p>
+<p style="font-size:16px; text-align:center;">
+g<sub>target</sub> = (1 − f<sub>headroom</sub>)<sup>η</sup>
+</p>
+<pre>isolation_gate_target = (1 - headroom_frac) ^ eta_LAM_iso</pre>
+<p>η (<code>eta_LAM_iso</code>, <code>"...porosity-isolation LAM exponent"</code>) sets the knee's
+sharpness/width — a small headroom fraction (near the floor) drives the target
+toward 1 (full isolation), large headroom fraction keeps it near 0.</p>
+
+<p><b>3. Isolation-gate state</b> (a lagged ODE state, not an instantaneous
+snapshot of the target — added so the gate can't jump discontinuously if
+the target itself has a kink):</p>
+<p style="font-size:16px; text-align:center;">
+dg/dt = (g<sub>target</sub> − g) / τ
+</p>
+<pre>d(isolation_gate)/dt = (isolation_gate_target - isolation_gate) / tau_LAM_iso</pre>
+<p>τ (<code>tau_LAM_iso</code>, <code>"...porosity-isolation gate time constant [s]"</code>) is the
+relaxation time constant (<code>set_rhs</code>), and g (<code>isolation_gate</code>) is the gate state itself.</p>
+
+<p><b>4. Remaining-active-fraction self-limiter</b> (so the isolation rate
+decays toward 0 as the phase is consumed, instead of driving the active
+volume fraction through/past zero):</p>
+<p style="font-size:16px; text-align:center;">
+f<sub>remain</sub> = clamp( ε<sub>s</sub> / ε<sub>s,0</sub> , 0, 1 )
+</p>
+<pre>remaining_frac = clip(eps_solid / eps_solid_init, 0, 1)</pre>
+<p>where ε<sub>s</sub> (<code>eps_solid</code>) is the phase's current active-material volume fraction and ε<sub>s,0</sub> (<code>eps_solid_init</code>) its BoL value.</p>
+
+<p><b>5. Isolation-driven active-material loss rate.</b> Two implementations
+exist, selected by <code>"SEI reaction redirect to LAM"</code>:</p>
+<ul>
+<li><b>Redirect-to-LAM</b> (the one used for CELL064's Si, current recommended
+  form — current-conserving, reuses the exact reaction current
+  <code>sei_growth.py</code> has already stopped counting toward SEI/LLI):
+  <p style="font-size:16px; text-align:center;">
+  j<sub>iso</sub> = γ · g · (a·j<sub>sei</sub>) / F · f<sub>remain</sub>
+  </p>
+  <pre>j_iso = redirect_LAM_yield * isolation_gate * a_j_sei / F * remaining_frac</pre>
+  where a·j<sub>sei</sub> (<code>a_j_sei</code>) is the SEI volumetric interfacial current density
+  [A/m<sup>3</sup>], F Faraday's constant, γ (<code>redirect_LAM_yield</code>,
+  <code>"...SEI-redirect-to-LAM yield"</code>) the fraction of the redirected current
+  that manifests as LAM (rather than vanishing).</li>
+<li><b>L<sub>sei</sub>-driven</b> (an alternative form, not the one used for CELL064):
+  <p style="font-size:16px; text-align:center;">
+  j<sub>iso</sub> = −β · L<sub>sei</sub> · g · f<sub>remain</sub>
+  </p>
+  <pre>j_iso = -beta_LAM_iso * L_sei * isolation_gate * remaining_frac</pre>
+  driven by accumulated SEI thickness L<sub>sei</sub> (<code>L_sei</code>, a monotonically
+  non-decreasing stock) rather than the instantaneous SEI reaction current,
+  so it does not collapse to 0 once electrolyte access is diffusion-limited
+  — β (<code>beta_LAM_iso</code>) is <code>"...porosity-isolation LAM factor [s-1.m-1]"</code>.</li>
+</ul>
+
+<p>Either way, j<sub>iso</sub> is added into the phase's active-material-fraction ODE:</p>
+<p style="font-size:16px; text-align:center;">
+dε<sub>s</sub>/dt = ... + j<sub>iso</sub>
+</p>
+<pre>d(eps_solid)/dt += j_iso</pre>
+<p>(alongside any stress-driven/reaction-driven LAM terms already present),
+and the corresponding lithium trapped in the now-isolated material is
+tracked as <code>lli_due_to_lam</code> (Sulzer et al. 2021 eq. 37's channel) so it
+counts toward the model's total LLI, not just LAM.</p>
+
+<h3>How this fits into core PyBaMM's submodel structure</h3>
+<ul>
+<li><b>Porosity submodel</b> (<code>src/pybamm/models/submodels/porosity/reaction_driven_porosity.py</code>):
+  computes structural porosity <code>eps_n</code> as a function of accumulated
+  SEI/plating thickness — this is what actually closes as the cell ages,
+  and what <code>headroom_frac</code> above reads.</li>
+<li><b>Active-material submodel</b> (<code>loss_active_material.py</code>, above): reads
+  <code>eps_n</code> (from porosity, built earlier in the submodel call order — see
+  build-order note below) and <code>a_j_sei</code>/<code>L_sei</code> (from the SEI submodel) to
+  compute and apply <code>j_iso</code>.</li>
+<li><b>SEI submodel</b> (<code>src/pybamm/models/submodels/interface/sei/sei_growth.py</code>):
+  under the redirect-to-LAM option, reduces its own SEI-film-growth rate
+  <code>dcdt_sei</code> by the <i>same</i> <code>isolation_gate</code> fraction, so the redirected
+  current is genuinely moved from "SEI growth" to "LAM", not double-counted.</li>
+<li><b>Build-order constraint</b> (discovered/confirmed this session):
+  <code>base_lithium_ion_model.py</code>'s <code>set_submodels()</code> registers submodels in a
+  fixed order — <code>particle mechanics</code> (crack/expansion) is registered
+  <i>before</i> <code>porosity</code> and <code>active material</code>. Within one coupled-variables
+  pass, a submodel may only safely read a <i>coupled</i> (non-fundamental)
+  variable from a submodel registered <i>earlier</i> in that list. This means
+  <code>base_mechanics.py</code> (particle mechanics/expansion) <b>cannot</b> read
+  <code>loss_active_material.py</code>'s <code>isolation_gate</code>/<code>j_iso</code> — but
+  <code>loss_active_material.py</code> (registered later) <i>can</i> safely read and patch
+  mechanics' already-built <code>"Cell thickness change [m]"</code> output. This
+  ordering constraint governed where several of this session's expansion-
+  related mechanisms could physically be implemented.</li>
+</ul>
+
+<h2>Finding 3: BoL solid-diffusion parameterization (particle radius &amp; diffusivity) controls the EoL stoichiometric collapse</h2>
+
+<h3>The problem, mechanistically</h3>
+<p>Si's solid-state diffusivity (<code>silicon_LGM50_diffusivity_Bonkile2024</code>,
+D_ref = 3.0e-16 m<sup>2</sup>/s) and particle radius (1.52e-6 m) are both literature
+placeholders carried into CELL064's parameter set unfitted — flagged
+<code>[LITERATURE - TO FIT]</code> in <code>cell064_parameters.py</code>'s own provenance notes,
+since no high-C-rate pouch data exists to fit them against directly.</p>
+
+<p>As the cell ages, Si loses active material via the porosity-isolation
+mechanism (Finding 2) — by EFC~200-250 the model's own Si active-volume
+fraction <code>eps_s</code> can fall to ~5-10% of its BoL value. The <b>same total
+discharge/charge current is now forced through a much smaller remaining
+active-Si volume</b>, so the <i>local</i> current density on the surviving
+particles rises sharply — even at a nominally slow C-rate (a "C/20" RPT can
+become a locally much higher effective rate once enough Si is isolated).
+Combined with Si's small particle radius and low diffusivity, the
+solid-diffusion time constant</p>
+<pre>tau_diffusion ~ R^2 / D</pre>
+<p>becomes large relative to the time available for lithium to
+equilibrate across the remaining particle at this elevated local current
+density. The result is severe solid-diffusion (concentration) polarisation:
+the particle surface hits the delithiation/lithiation limit and the
+terminal voltage crosses the cutoff <b>long before the bulk of the particle
+has actually been drained/filled</b> — i.e. the model's own particle-surface
+stoichiometry excursion within a cycle collapses to a tiny sliver, even
+though the true thermodynamically-accessible capacity is much larger.</p>
+
+<p>Confirmed directly this session: with the OLD (unfitted) diffusivity/radius,
+the model's own Si stoichiometric window (<code>sto_max - sto_min</code> within one
+discharge) collapsed <b>~9-300x</b> from early life to EoL, depending on
+whether measured on the slow C/20 RPT diagnostic or the faster C/3 ageing
+cycle. Real CELL064 data shows nothing like this — see the table below.</p>
+
+<h3>Real experimental stoichiometric ranges (from CELL064's own DMA/eSOH fits)</h3>
+<p>Extracted directly from Pouch_Data's already-validated
+<code>discharge_esoh_fit.py</code> output (the raw per-RPT discharge CSVs carry a
+<code>model_x_si</code>/<code>model_x_gr</code> column — the eSOH fit's own reconstructed
+stoichiometry at every measured point); <code>x_si_delta = max(model_x_si) -
+min(model_x_si)</code> over one full discharge:</p>
+
+<table>
+<tr><th>RPT</th><th>EFC</th><th>source</th><th>x_si_max</th><th>x_si_min</th><th>x_si_delta</th><th>x_gr_delta</th></tr>
+<tr><td>0</td><td>0.8</td><td>hi-rate neighbor</td><td>0.987</td><td>0.060</td><td><b>0.927</b></td><td>0.827</td></tr>
+<tr><td>1</td><td>50.6</td><td>C/20 RPT</td><td>0.993</td><td>0.003</td><td><b>0.990</b></td><td>0.895</td></tr>
+<tr><td>2</td><td>100.0</td><td>C/20 RPT</td><td>0.984</td><td>0.003</td><td><b>0.981</b></td><td>0.846</td></tr>
+<tr><td>3</td><td>148.5</td><td>hi-rate neighbor</td><td>0.991</td><td>0.065</td><td><b>0.926</b></td><td>0.755</td></tr>
+<tr><td><b>4</b></td><td><b>222.0</b></td><td>C/20 RPT</td><td>0.990</td><td>0.211</td><td><b>0.780</b></td><td>0.783</td></tr>
+<tr><td><b>5</b></td><td><b>248.0</b></td><td>C/20 RPT</td><td>0.988</td><td>0.069</td><td><b>0.920</b></td><td>0.838</td></tr>
+</table>
+
+<p>Real Si's stoichiometric window barely narrows across the whole real
+life — worst case a <b>1.27x</b> reduction at RPT4 (near the knee), and it
+<i>recovers</i> by RPT5. This directly contradicts the old baseline's ~9-300x
+collapse: the real cell is nowhere near as diffusion/polarisation-limited
+at EoL as the unfitted parameters made the model.</p>
+
+<h3>The fix and its effect</h3>
+<p>Wired <code>C64_SI_DIFFUSIVITY_MULT</code> and <code>C64_SI_PARTICLE_RADIUS_MULT</code> (simple
+scalar multipliers on the literature values) into
+<code>cell064_degradation_fit.py</code>'s <code>PARAM_UPDATES</code>. Particle radius is the
+stronger lever per unit change (<code>tau ~ R^2/D</code>, quadratic vs. diffusivity's
+linear effect) — a radius cut to x0.2 of the literature value, combined
+with a x3 diffusivity increase, was adopted for the new baseline. This
+relieves the solid-diffusion bottleneck enough that the remaining active Si
+can actually equilibrate across a full discharge even once most of the
+phase has been isolated — allowing the model's stoichiometric window to
+stay close to fully utilised at EoL, matching the real DMA data's ~1.27x
+(not ~9-300x) collapse.</p>
+
+<p>Split into three separate figures below per feedback — a single combined
+plot with real + old + new baseline, at both C/20 and C/3 rates, got too
+crowded to read.</p>
+
+<img src="dma_si_real_window.png">
+<div class="caption">Real per-RPT Si/Gr stoichiometric window (reference, unchanged).</div>
+
+<img src="dma_si_c20rpt_comparison.png">
+<div class="caption">The apples-to-apples comparison: real Si (C/20) vs. old baseline vs. new baseline, each on their own C/20 RPT legs. The new baseline tracks the real curve closely; the old baseline collapses to ~0.1 by EFC~220.</div>
+
+<img src="dma_si_c3_comparison.png">
+<div class="caption">Old vs. new baseline's C/3 ageing-leg collapse (no real-data equivalent exists at this rate). The new baseline's collapse is far more gradual, reaching a much higher floor (~0.46 vs. old's ~0.07).</div>
+
+<div class="figstack">
+<img src="../degradation_test_matrix/stoichiometry_evolution_sidiff_x1.png">
+<div class="caption">Old baseline (Finding 3's -- isolation ON, radius/diffusivity unfitted): per-RPT Gr/Si stoichiometry-window plot. Note the latest-RPT curve collapsing to a thin sliver.</div>
+<img src="../degradation_test_matrix/stoichiometry_evolution_pbuf2_f0p7_w0p03.png">
+<div class="caption">New baseline: same plot — full Si swing retained even at the last RPT.</div>
+</div>
+
+<img src="all_levers_summary.png">
+<div class="caption">Full lever-sweep landscape (diffusivity, exchange-current, particle radius, and combinations) that led to this fix, including levers that did NOT help.</div>
+
+<img src="c3_collapse_vs_fit_landscape.png">
+<div class="caption">C/3 collapse ratio vs. expansion-fit quality across the sweep — shows the floor-retune "trap" (looked good on some metrics, was actually worse on the metric that matters).</div>
+
+<h2>Files referenced in this write-up</h2>
+<p>All under <code>si_gr_expansion_precursor/pouch_cell_064/</code>:</p>
+<ul>
+<li><code>dma/REPORT.md</code> — the fuller technical log of the diffusivity/exchange-current/particle-radius investigation (Finding 3's detailed backing).</li>
+<li><code>dma/real_si_gr_sto_window_by_rpt.csv</code> — the real stoichiometric-range table in full.</li>
+<li><code>dma/writeup_*.png</code> — the new comparison plots generated for this write-up (RPT4/5 V(Q), dV/dQ, LAM, LLI).</li>
+<li><code>degradation_test_matrix/cell064_degradation_fit.py</code> — the fit driver; see its <code>PARAM_UPDATES</code> dict and the <code>SI_DIFFUSIVITY_MULT</code>/<code>SI_PARTICLE_RADIUS_MULT</code>/<code>SI_K_SEI_MULT</code>/<code>GR_K_SEI_MULT</code>/<code>NEG_POROSITY_BOL</code> definitions for the exact old/new values.</li>
+</ul>
+
+</body>
+</html>

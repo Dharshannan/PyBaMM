@@ -20,6 +20,10 @@ class SingleOpenCircuitPotential(BaseOpenCircuitPotential):
 
             dUdT = self.phase_param.dUdT(sto_surf)
 
+            ocp_surf, ocp_bulk = self._apply_ocp_aging_deformation(
+                variables, ocp_surf, ocp_bulk
+            )
+
         elif self.reaction == "lithium metal plating":
             T = variables[f"{Domain} electrode temperature [K]"]
             ocp_surf = 0 * T
