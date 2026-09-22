@@ -87,6 +87,29 @@ class BaseHysteresisOpenCircuitPotential(BaseOpenCircuitPotential):
             U_delith = self.phase_param.U(sto_surf, T, "delithiation")
             U_delith_bulk = self.phase_param.U(sto_bulk, T_bulk, "delithiation")
 
+            # Aging deformation (item 25 / throughput-driver follow-up):
+            # applied to the DELITHIATION branch ONLY, before the
+            # lithiation/delithiation blend below -- not to the blended
+            # ocp_surf/ocp_bulk (as an earlier version of this did). The
+            # real per-RPT calibration data behind BOTH drivers (LAM
+            # fraction and throughput) comes entirely from RPT DISCHARGE
+            # (delithiation) eSOH fits; deforming lithiation too would
+            # silently extend an unmeasured correction onto the CHARGE
+            # curve as well. Since charge steps are voltage-limited
+            # (CC-CV to a fixed cutoff), a lowered lithiation OCP would
+            # make the cell reach that cutoff EARLIER (at a lower degree
+            # of lithiation) as aging progresses -- throttling how much
+            # lithium the model allows into the phase each aging cycle, a
+            # spurious, compounding side effect that could itself look
+            # like (or interact with) excess overpotential rather than
+            # being a validated thermodynamic correction. Doing the
+            # deformation here (pre-blend) instead of post-blend also
+            # means the published "OCP hysteresis [V]" (H, below) reflects
+            # the now-asymmetric gap correctly.
+            U_delith, U_delith_bulk = self._apply_ocp_aging_deformation(
+                variables, U_delith, U_delith_bulk
+            )
+
             H = U_lith - U_delith
 
             # Under particle-size distribution the OCPs above live on the
@@ -150,10 +173,6 @@ class BaseHysteresisOpenCircuitPotential(BaseOpenCircuitPotential):
             h_s_av = pybamm.size_average(h_x_av)
             ocp_bulk = (1 + h_s_av) / 2 * U_delith_bulk + (1 - h_s_av) / 2 * U_lith_bulk
             dUdT = self.phase_param.dUdT(sto_surf)
-
-            ocp_surf, ocp_bulk = self._apply_ocp_aging_deformation(
-                variables, ocp_surf, ocp_bulk
-            )
 
         variables.update(self._get_standard_ocp_variables(ocp_surf, ocp_bulk, dUdT))
         return variables

@@ -205,6 +205,25 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 ("silicon burn-out") from LAM/LLI, absent from the model when
                 this option is "false" (a single fixed OCP curve for the
                 whole simulated life).
+            * "OCP aging deformation driver" : str
+                Can be "LAM fraction" (default) or "throughput". Only
+                referenced when "open-circuit potential aging deformation"
+                is "true". "LAM fraction" is the original item-25 behaviour
+                above. "throughput" instead makes scale/shift a piecewise-
+                linear function of this phase's own cumulative throughput
+                (via "Throughput capacity [A.h]", converted to the phase's
+                own EFC convention through "...OCP aging-deformation EFC
+                points"/"...scale points"/"...shift points", clamped
+                outside the given EFC range) -- CELL064 investigation
+                item 25 follow-up: the "LAM fraction" driver is
+                monotonically non-decreasing by construction (LAM fraction
+                only ever grows), but this cell's own per-RPT eSOH fits
+                show non-monotonic behaviour at one RPT that isn't
+                believed physical (treated as a single-fit anomaly, not a
+                genuine reversal); "throughput" lets the deformation be
+                driven directly by elapsed EFC against the REMAINING
+                (monotonic) real per-RPT anchors instead of a proxy that
+                cannot reproduce them by construction.
             * "volume change aging deformation" : str
                 Can be "false" (default) or "true". When "true" and "loss of
                 active material" includes "porosity isolation" for a phase,
@@ -457,6 +476,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "interface utilisation": ["full", "constant", "current-driven"],
             "SEI reaction redirect to LAM": ["false", "true"],
             "open-circuit potential aging deformation": ["false", "true"],
+            "OCP aging deformation driver": ["LAM fraction", "throughput"],
             "volume change aging deformation": ["false", "true"],
             "active material expansion residual": ["false", "true"],
             "lithium plating": [
@@ -563,6 +583,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "interface utilisation": "full",
             "SEI reaction redirect to LAM": "false",
             "open-circuit potential aging deformation": "false",
+            "OCP aging deformation driver": "LAM fraction",
             "volume change aging deformation": "false",
             "active material expansion residual": "false",
             "lithium plating": "none",

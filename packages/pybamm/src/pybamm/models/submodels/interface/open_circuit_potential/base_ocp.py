@@ -1,6 +1,8 @@
 #
 # Base class for open-circuit potential
 #
+import numpy as np
+
 import pybamm
 from pybamm.models.submodels.interface.base_interface import BaseInterface
 
@@ -102,6 +104,42 @@ class BaseOpenCircuitPotential(BaseInterface):
             return ocp_surf, ocp_bulk
 
         phase_name = self.phase_name
+
+        if self.options["OCP aging deformation driver"] == "throughput":
+            # CELL064 investigation item 25 follow-up: the "LAM fraction"
+            # driver below is monotonically non-decreasing by construction
+            # (LAM fraction only ever grows), but this cell's own per-RPT
+            # eSOH fits show one RPT where the fitted deformation briefly
+            # eases back off -- believed a single-fit anomaly, not a real
+            # reversal, so excluded here. This driver instead interpolates
+            # elapsed EFC (from "Throughput capacity [A.h]") directly
+            # against the REMAINING (monotonically decreasing) real
+            # per-RPT anchors, expressed as "extra" scale/shift relative
+            # to RPT1 -- same convention as the LAM-fraction driver, so
+            # the two are directly comparable, just with a different
+            # x-axis driving the ramp. Hardcoded, not swappable Parameters,
+            # because pybamm.Interpolant needs concrete x/y data at
+            # construction time; a different cell/project reusing this
+            # option would edit these three arrays directly.
+            Qt_Ah = variables["Throughput capacity [A.h]"]
+            efc = Qt_Ah / (2 * self.param.Q)
+            efc_pts = np.array([0.0, 49.4, 197.4])
+            scale_pts = np.array([1.0, 0.988251, 0.866272])
+            shift_pts = np.array([0.0, -0.042672, -0.009081])
+            efc_clamped = pybamm.minimum(
+                pybamm.maximum(efc, efc_pts[0]), efc_pts[-1]
+            )
+            end_scale = pybamm.Interpolant(
+                efc_pts, scale_pts, efc_clamped, interpolator="linear"
+            )
+            end_shift = pybamm.Interpolant(
+                efc_pts, shift_pts, efc_clamped, interpolator="linear"
+            )
+            ocp_surf = end_scale * ocp_surf + end_shift
+            ocp_bulk = end_scale * ocp_bulk + end_shift
+            return ocp_surf, ocp_bulk
+
+        # Default driver: "LAM fraction"
         end_scale = self.phase_param.ocp_aging_deform_scale
         end_shift = self.phase_param.ocp_aging_deform_shift
         eps_solid_init = self.phase_param.epsilon_s

@@ -1270,6 +1270,8 @@ import pandas as pd
 
 import pybamm
 from pybamm.input.parameters.lithium_ion.si_gr_expansion import (
+    electrolyte_conductivity_Nyman2008_arrhenius,
+    electrolyte_diffusivity_Nyman2008_arrhenius,
     silicon_LGM50_diffusivity_Bonkile2024,
     silicon_LGM50_electrolyte_exchange_current_density_Chen2020,
 )
@@ -1278,7 +1280,10 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PARAMS_DIR = os.path.join(SCRIPT_DIR, "..", "parameters")
 EXPERIMENTAL_DATA_DIR = os.path.join(SCRIPT_DIR, "experimental_data")
 sys.path.insert(0, PARAMS_DIR)
-from cell064_parameters import get_parameter_values  # noqa: E402
+from cell064_parameters import (  # noqa: E402
+    _silicon_ocp_delithiation_data,
+    get_parameter_values,
+)
 
 # RPT1 (EFC50.6) reads IDENTICAL to RPT0/BoL (100% SoH) -- nothing in the
 # real capacity-fade data distinguishes EFC 0-50 from t=0 itself, i.e. the
@@ -1398,6 +1403,13 @@ SI_OCP_AGING_DEFORM = os.environ.get("C64_SI_OCP_AGING_DEFORM", "0") == "1"
 SI_OCP_DEFORM_SCALE = float(os.environ.get("C64_SI_OCP_DEFORM_SCALE", 0.8663))
 SI_OCP_DEFORM_SHIFT = float(os.environ.get("C64_SI_OCP_DEFORM_SHIFT", -0.00908))
 OCP_AGING_DEFORM_OPTION = "true" if SI_OCP_AGING_DEFORM else "false"
+# Overpotential investigation (2026-09-22) follow-up: "LAM fraction" (the
+# original item-25 driver, default) vs "throughput" (piecewise-linear-in-
+# EFC through this cell's own real per-RPT anchors, RPT4 excluded as a
+# believed single-fit anomaly -- see base_ocp.py's
+# _apply_ocp_aging_deformation doc-comment). Only referenced when
+# SI_OCP_AGING_DEFORM is on.
+OCP_DEFORM_DRIVER = os.environ.get("C64_OCP_DEFORM_DRIVER", "LAM fraction")
 
 # Item 29: Si volume-change aging deformation (t_change exponent evolves
 # with LAM fraction) -- see lithium_ion_parameters.py's
@@ -1460,6 +1472,7 @@ MODEL_OPTIONS_BASE = {
     "SEI film resistance": SEI_FILM_RESISTANCE_OPTION,
     "SEI reaction redirect to LAM": SEI_REDIRECT_TO_LAM_OPTION,
     "open-circuit potential aging deformation": OCP_AGING_DEFORM_OPTION,
+    "OCP aging deformation driver": OCP_DEFORM_DRIVER,
     "volume change aging deformation": VOLUME_CHANGE_AGING_DEFORM_OPTION,
     "active material expansion residual": LAM_EXPANSION_RESIDUAL_OPTION,
     "thermal": THERMAL_OPTION,
@@ -1699,6 +1712,36 @@ def _silicon_exchange_current_scaled(c_e, c_s_surf, c_s_max, T):
 BASE_SI_PARTICLE_RADIUS = 1.52e-06
 SI_PARTICLE_RADIUS_MULT = float(os.environ.get("C64_SI_PARTICLE_RADIUS_MULT", 1.0))
 
+# Electrolyte diffusivity/conductivity multipliers (overpotential
+# investigation, 2026-09-21): si_gr_expansion.py's electrolyte transport
+# is Nyman2008 -- a generic LiPF6/EC:EMC(3:7) characterisation, never
+# measured for CELL064's own electrolyte formulation, carrying the same
+# "literature placeholder" status as the Si diffusivity/exchange-current/
+# radius knobs above (all of which turned out to matter once actually
+# tested). Unlike the Bruggeman coefficient (a geometric/tortuosity fit
+# constant with no direct measurement for this electrode's own
+# microstructure), these functions ARE a measurable electrolyte material
+# property that a different real formulation could genuinely differ from.
+# Candidate story for why an under-estimate here could show up
+# preferentially POST-KNEE even though the functions themselves carry no
+# explicit degradation dependence: as Si LAM/isolation shrinks the real
+# electroactive area, the LOCAL current density (and hence electrolyte
+# flux/gradient) through the remaining porosity rises well above what the
+# cell's nominal C/20 rate implies -- the same fractional transport
+# under-estimate that's invisible against BOL's tiny polarisation could
+# become a visible voltage gap once that local driving current grows.
+# Default 1.0 = unchanged baseline (Nyman2008 as-is).
+ELECTROLYTE_DIFFUSIVITY_MULT = float(os.environ.get("C64_ELECTROLYTE_DIFFUSIVITY_MULT", 1.0))
+ELECTROLYTE_CONDUCTIVITY_MULT = float(os.environ.get("C64_ELECTROLYTE_CONDUCTIVITY_MULT", 1.0))
+
+
+def _electrolyte_diffusivity_scaled(c_e, T):
+    return ELECTROLYTE_DIFFUSIVITY_MULT * electrolyte_diffusivity_Nyman2008_arrhenius(c_e, T)
+
+
+def _electrolyte_conductivity_scaled(c_e, T):
+    return ELECTROLYTE_CONDUCTIVITY_MULT * electrolyte_conductivity_Nyman2008_arrhenius(c_e, T)
+
 
 PARAM_UPDATES = {
     "Initial concentration in electrolyte [mol.m-3]": 1000.0 * ELECTROLYTE_CONC_MULT,
@@ -1744,6 +1787,8 @@ PARAM_UPDATES = {
     "Secondary: SEI resistivity [Ohm.m]": BASE_R_SEI * SI_R_SEI_MULT,
     "Secondary: Negative particle diffusivity [m2.s-1]": _silicon_diffusivity_scaled,
     "Secondary: Negative electrode exchange-current density [A.m-2]": _silicon_exchange_current_scaled,
+    "Electrolyte diffusivity [m2.s-1]": _electrolyte_diffusivity_scaled,
+    "Electrolyte conductivity [S.m-1]": _electrolyte_conductivity_scaled,
     "Secondary: Negative particle radius [m]": BASE_SI_PARTICLE_RADIUS * SI_PARTICLE_RADIUS_MULT,
 }
 if NEG_POROSITY_BOL is not None:
@@ -1753,7 +1798,17 @@ if NEG_POROSITY_BOL is not None:
 BATCH_SIZE = int(os.environ.get("C64_BATCH_SIZE", 50))
 MAX_TOTAL_CYCLES = int(os.environ.get("C64_MAX_CYCLES", 250))  # item 19: lowered 450->250. Nothing to fit past EFC~200 (real RPT5 is EFC~197 shifted), and the long tail-runs to 45% SoH accumulate PyBaMM solution history unboundedly -> ~24 GB/run, OOM'd a 3-parallel sweep. 250 requested cycles covers RPTs at 50/100/150/200/250 and still reaches real RPT4/RPT5's EFC range even with a few retry-stalled batches (item 11's reason for 450); raise via C64_MAX_CYCLES only for a deliberate full-life run.
 RPT_INTERVAL = int(os.environ.get("C64_RPT_INTERVAL", 50))
-RPT_RATE = "C/20"
+# Overpotential investigation (2026-09-22) follow-up: lets the RPT rate
+# itself be swept (e.g. C/50) to test whether the residual post-knee
+# voltage-shape gap is genuinely rate-dependent (a real kinetic/ohmic
+# overpotential, which should shrink at lower current) or rate-independent
+# (an OCP-curve-shape or accessible-stoichiometry-window mismatch, which
+# wouldn't). C/100 is NOT safe here without also widening the hardcoded
+# "0.05 < mean_I <= 0.5" RPT-leg classification window used in several
+# places below (NOMINAL_CAP_AH=2.5947 Ah -> C/100 = 0.0259 A, below the
+# 0.05 A floor -- the step would silently fail to be picked up as an RPT
+# curve at all). C/50 = 0.0519 A clears that floor safely.
+RPT_RATE = os.environ.get("C64_RPT_RATE", "C/20")
 assert BATCH_SIZE % RPT_INTERVAL == 0, "BATCH_SIZE must be a multiple of RPT_INTERVAL"
 SOH_TERMINATION_PERCENT = float(os.environ.get("C64_SOH_FLOOR", 45.0))  # a little past the real data's lowest point (50.0% @ EFC 248); override lets a one-off extended run push past it (post-knee EFC accumulates slower than cycle count, roughly proportional to SoH, so reaching the model's own last RPT past real EFC~200 needs the floor pushed down too, not just C64_MAX_CYCLES)
 EFC_LIMIT = float(os.environ.get("C64_EFC_LIMIT", "inf"))  # optional third stop condition alongside MAX_TOTAL_CYCLES/SOH_TERMINATION_PERCENT: some configs (e.g. very low GR_K_SEI_MULT) fade so slowly that neither the cycle budget nor the SoH floor triggers anywhere near the real RPT4/RPT5 EFC range, wasting a long tail of cycles past the EFC we actually score against. Checked every batch via the same "Throughput capacity [A.h]" summary variable efc_from_throughput() already uses, so it's directly comparable to the real data's EFC axis.
@@ -2401,6 +2456,77 @@ def score_voltage_shape(results, exp_cap):
     return mean_rmse
 
 
+def score_voltage_shape_soc(results, exp_cap):
+    """Overpotential investigation (2026-09-21) follow-up metric:
+    score_voltage_shape() above compares model vs. real V at matched RAW
+    discharge capacity (q_real <= q_model.max(), then interpolate model V
+    onto q_real) -- which silently conflates two different things whenever
+    the model's own total deliverable capacity at that RPT differs from
+    real's (exactly the case once a fix like raising electrolyte
+    diffusivity also shifts the capacity-fade trajectory): (a) a genuine
+    resistance/overpotential mismatch at a given state of charge, and (b)
+    a capacity-fade-RATE mismatch that shows up as a large V gap near
+    the tail simply because the model hasn't reached its own steep part
+    of the curve yet. score_rpt_gap() already tracks (b) on its own (the
+    SoH-at-RPT single-number metric) -- keep using both together, not one
+    instead of the other, so a candidate that "fixes" this metric by
+    quietly over-predicting capacity again (over-fitting to this metric
+    alone) is caught by rpt_gap_pp getting worse.
+
+    This metric isolates (a): both model and real Q are normalised to
+    their OWN discharged-capacity fraction (0-1, i.e. depth-of-discharge)
+    before comparing V, so two curves with identical polarisation physics
+    but different total capacity now score ~0 here regardless of the
+    capacity mismatch. Same RPT-matching convention as
+    score_voltage_shape()."""
+    model_curves = results["rpt_voltage_curves"]
+    if not model_curves:
+        print("Voltage shape RMSE (SOC-normalised): unavailable (no model RPT curves)", flush=True)
+        return None
+    model_efcs = efc_from_throughput(np.array([c["thr"] for c in model_curves]))
+    c20 = exp_cap[exp_cap["source"] == "C/20 RPT"]
+    real_efc_by_rpt = dict(zip(c20["rpt"], c20["efc"]))
+    print("Voltage shape RMSE, SOC-normalised (model vs. real V at matched depth-of-"
+          "discharge FRACTION, not raw Ah -- isolates resistance/overpotential shape "
+          "from capacity-fade-rate mismatch):", flush=True)
+    rmses = []
+    used_js = set()
+    for rpt_num in REAL_RPT_NUMS_WITH_DISCHARGE:
+        if rpt_num not in real_efc_by_rpt:
+            continue
+        real_efc = real_efc_by_rpt[rpt_num]
+        order = np.argsort(np.abs(model_efcs - real_efc))
+        j = next((int(k) for k in order if int(k) not in used_js), int(order[0]))
+        used_js.add(j)
+        model_efc = float(model_efcs[j])
+        if abs(model_efc - real_efc) > 20.0:
+            print(f"  RPT{rpt_num} (EFC {real_efc:.1f}): SKIPPED, nearest model RPT is "
+                  f"{abs(model_efc - real_efc):.1f} EFC away", flush=True)
+            continue
+        q_real, v_real = load_real_rpt_discharge(rpt_num)
+        q_model, v_model = model_curves[j]["q"], model_curves[j]["v"]
+        if q_real.max() <= 0 or q_model.max() <= 0:
+            continue
+        soc_real = q_real / q_real.max()
+        soc_model = q_model / q_model.max()
+        # Both curves now span [0, 1] by construction -- no truncation needed,
+        # unlike the raw-capacity version (this is the whole point: it
+        # compares the FULL discharge, not just whatever fraction overlaps).
+        v_model_interp = np.interp(soc_real, soc_model, v_model)
+        rmse = float(np.sqrt(np.mean((v_model_interp - v_real) ** 2)))
+        rmses.append(rmse)
+        print(f"  RPT{rpt_num} (EFC {real_efc:.1f}, model EFC {model_efc:.1f}): "
+              f"RMSE={rmse:.4f} V (model Qmax={q_model.max():.3f} Ah vs. "
+              f"real Qmax={q_real.max():.3f} Ah)", flush=True)
+    if not rmses:
+        print("  (no real RPT discharge curve fell within the model's own RPT range)", flush=True)
+        return None
+    mean_rmse = float(np.mean(rmses))
+    print(f"  mean SOC-normalised voltage-shape RMSE = {mean_rmse:.4f} V across "
+          f"{len(rmses)} matched RPT(s)", flush=True)
+    return mean_rmse
+
+
 def _plot_soh(ax, results, exp_cap, sim_efc_age, sim_efc_rpt):
     ax.plot(sim_efc_age, 100 * results["age_cap"] / results["age_cap"][0],
             "o-", ms=3, color="tab:blue", label="Model (C/3 ageing)")
@@ -2567,6 +2693,116 @@ def _plot_k_ratio(ax, results, exp_k, sim_efc_rpt):
     ax.set_title("Expansion scale k: model vs. experimental")
     ax.legend(fontsize=8)
     ax.grid(alpha=0.3)
+
+
+# Real per-RPT Si OCP deformation, ABSOLUTE (s_V, U_off) relative to the
+# UNDEFORMED native curve -- from CELL064's own discharge eSOH fits
+# (Si_Gr_Expansion_Precursor/Pouch_Data/cell064_data/reports/
+# CELL064_discharge_esoh_fit_summary.csv, si_ocp_scale/si_ocp_shift_V
+# columns; RPT3/RPT0 excluded, no valid fit -- same set as
+# REAL_RPT_NUMS_WITH_DISCHARGE). This project's own local
+# silicon_ocp_bol_deformed_cell064.csv already IS the real RPT1 curve (see
+# cell064_parameters.py's docstring), so plot_si_ocp_aging() expresses both
+# model and real curves as "extra" deformation RELATIVE TO RPT1 -- they
+# coincide there by construction, and RPT2/4/5 are the actual comparison.
+REAL_SI_OCP_SCALE = {
+    1: 0.9674993479225127, 2: 0.956132041640861,
+    4: 0.9918793622372972, 5: 0.8381174937799558,
+}
+REAL_SI_OCP_SHIFT_V = {
+    1: -0.017196407818913798, 2: -0.05966682091070624,
+    4: -0.03531036950197544, 5: -0.023977305790871085,
+}
+
+
+def plot_si_ocp_aging(results, exp_cap):
+    """Diagnostic (2026-09-22, OCP-aging-deformation investigation): the
+    Secondary (Si) electrode's delithiation OCP curve as the MODEL deforms
+    it at each matched real RPT's own EFC (via this phase's own LAM_Si
+    fraction -- see base_ocp.py's _apply_ocp_aging_deformation), overlaid
+    against the REAL per-RPT deformation independently measured from
+    CELL064's own discharge eSOH fits (REAL_SI_OCP_SCALE/SHIFT_V above).
+    Both are expressed relative to RPT1, so RPT1 coincides by construction
+    -- whether RPT2/RPT4/RPT5 track is the actual question this answers.
+    Real s_V is NOT monotonic (0.967/0.956/0.992/0.838 for RPT1/2/4/5) --
+    barely deformed at RPT4, then a sharp collapse to RPT5 -- while the
+    model ramps smoothly via LAM_Si fraction (already ~58% by RPT4), so a
+    mismatch in WHEN the deformation kicks in (not just how much) is the
+    working hypothesis this plot is meant to surface."""
+    from scipy.interpolate import CubicSpline
+
+    _name, (_x, _y) = _silicon_ocp_delithiation_data
+    _x = np.asarray(_x).ravel()
+    _y = np.asarray(_y).ravel()
+    sto = np.linspace(max(0.02, float(_x.min())), min(0.98, float(_x.max())), 300)
+    base_curve = CubicSpline(_x, _y)(sto)  # plain-numpy eval of the same
+    # cubic-interpolated CSV pybamm.Interpolant(..., interpolator="cubic")
+    # uses symbolically in the model itself.
+
+    Qt_efc = efc_from_throughput(results["Qt"])
+    c20 = exp_cap[exp_cap["source"] == "C/20 RPT"]
+    real_efc_by_rpt = dict(zip(c20["rpt"], c20["efc"]))
+
+    fig, ax = plt.subplots(figsize=(8.5, 6.5))
+    cmap = plt.cm.viridis
+    rpts = sorted(REAL_SI_OCP_SCALE)
+    norm = plt.Normalize(vmin=min(rpts), vmax=max(rpts))
+
+    for rpt_num in rpts:
+        if rpt_num not in real_efc_by_rpt:
+            continue
+        real_efc = real_efc_by_rpt[rpt_num]
+        color = cmap(norm(rpt_num))
+
+        # Real: absolute (s_V, U_off) measured at this RPT, re-expressed
+        # relative to RPT1 to match the model's own "extra beyond RPT1"
+        # convention (k_extra = s_V,N/s_V,1, shift_extra = U_off,N -
+        # k_extra*U_off,1 -- same formula that derived the model's own
+        # SI_OCP_DEFORM_SCALE/SHIFT defaults from the RPT1->RPT5 pair).
+        k_rel_real = REAL_SI_OCP_SCALE[rpt_num] / REAL_SI_OCP_SCALE[1]
+        b_rel_real = (REAL_SI_OCP_SHIFT_V[rpt_num]
+                      - k_rel_real * REAL_SI_OCP_SHIFT_V[1])
+        real_curve = k_rel_real * base_curve + b_rel_real
+        ax.plot(sto, real_curve, "--", color=color, lw=1.6,
+                label=f"Real RPT{rpt_num} (EFC~{real_efc:.0f}, "
+                      f"s_V={REAL_SI_OCP_SCALE[rpt_num]:.3f})")
+
+        # Model: run through the SAME deformation formula base_ocp.py's
+        # _apply_ocp_aging_deformation applies (whichever driver is active
+        # -- note both now deform ONLY the delithiation branch, matching
+        # this plot's own base_curve, per the lithiation/charge-throttling
+        # fix).
+        lam_si_pct = float(np.interp(real_efc, Qt_efc, results["LAM_si"]))
+        lam_frac = min(max(lam_si_pct / 100.0, 0.0), 1.0)
+        if not SI_OCP_AGING_DEFORM:
+            k_model, b_model = 1.0, 0.0
+            label_extra = ""
+        elif OCP_DEFORM_DRIVER == "throughput":
+            # Must match base_ocp.py's hardcoded efc_pts/scale_pts/shift_pts
+            # exactly (RPT1/RPT2/RPT5, RPT4 excluded as a believed anomaly).
+            _efc_pts = np.array([0.0, 49.4, 197.4])
+            _scale_pts = np.array([1.0, 0.988251, 0.866272])
+            _shift_pts = np.array([0.0, -0.042672, -0.009081])
+            efc_c = min(max(real_efc, _efc_pts[0]), _efc_pts[-1])
+            k_model = float(np.interp(efc_c, _efc_pts, _scale_pts))
+            b_model = float(np.interp(efc_c, _efc_pts, _shift_pts))
+            label_extra = f"EFC={real_efc:.0f}, "
+        else:
+            k_model = 1 + lam_frac * (SI_OCP_DEFORM_SCALE - 1)
+            b_model = lam_frac * SI_OCP_DEFORM_SHIFT
+            label_extra = f"LAM_Si={lam_si_pct:.0f}%, "
+        model_curve = k_model * base_curve + b_model
+        ax.plot(sto, model_curve, "-", color=color, lw=2.0,
+                label=f"Model RPT{rpt_num} ({label_extra}k={k_model:.3f})")
+
+    ax.set_xlabel("Silicon stoichiometry (delithiation branch)")
+    ax.set_ylabel("OCP [V]")
+    ax.set_title("CELL064: Silicon OCP aging deformation, model vs. real\n"
+                 "(solid=model, dashed=real; both relative to RPT1's own curve)")
+    ax.legend(fontsize=7, ncol=2, loc="upper right")
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+    _savefig(fig, "cell064_si_ocp_aging_result")
 
 
 def _savefig(fig, base_name):
@@ -2819,6 +3055,7 @@ def plot_all(results, sol=None):
     plot_degradation_diagnostics(results, exp_cap, exp_lam, exp_lli, sim_efc_age, sim_efc_rpt, sim_efc_full)
     plot_expansion_diagnostics(results, exp_exp, exp_k, sim_efc_age, sim_efc_rpt)
     plot_overall_summary(results, exp_cap, exp_lam, exp_lli, exp_exp, exp_k, sim_efc_age, sim_efc_rpt, sim_efc_full)
+    plot_si_ocp_aging(results, exp_cap)
     if sol is not None:
         plot_stoichiometry_evolution(sol)
         plot_thermal_diagnostics(sol)
