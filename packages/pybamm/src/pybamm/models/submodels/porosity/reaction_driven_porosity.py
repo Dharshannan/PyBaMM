@@ -194,6 +194,20 @@ class ReactionDriven(BaseModel):
             if (
                 domain == "negative electrode"
                 and self.options["pore buffering"] == "true"
+                and thickness_key not in variables
+            ):
+                # Never skip buffering silently just because the mechanics
+                # submodel hasn't produced its thickness change yet in
+                # build_coupled_variables: defer (KeyError) so this submodel is
+                # retried after it. Only falls through when the negative
+                # electrode genuinely has no particle mechanics.
+                mech = self.options.negative["particle mechanics"]
+                mech = mech if isinstance(mech, tuple) else (mech,)
+                if any(m != "none" for m in mech):
+                    raise KeyError(thickness_key)
+            if (
+                domain == "negative electrode"
+                and self.options["pore buffering"] == "true"
                 and thickness_key in variables
             ):
                 thickness_change_unbuffered = variables[thickness_key]

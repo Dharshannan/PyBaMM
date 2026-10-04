@@ -34,6 +34,10 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Output folder (plots, CSV, pickle, cwd). Default: this folder; RPT_OUT_DIR
+# redirects a study's runs into its own subfolder (e.g. si_volume_cracks/).
+OUT = os.path.abspath(os.environ.get("RPT_OUT_DIR", HERE))
+os.makedirs(OUT, exist_ok=True)
 T_ARG = sys.argv[1] if len(sys.argv) > 1 else "25"
 CONFIGS = {
     "25": dict(C64_T_AMBIENT_K="298.15", C64_F0="0.7", C64_WIDTH="5e-3", tag="v3_25degC"),
@@ -77,10 +81,16 @@ CRACK_VARS = [
     "Loss of lithium to negative secondary SEI [mol]",
     "Loss of lithium to negative secondary SEI on cracks [mol]",
 ]
-os.environ.setdefault("C64_DIAG_EXTRA_VARS", "|".join([LLI_VAR] + CRACK_VARS))
+# Route-B (strain-fatigue cracking) diagnostics exist only when it is on.
+STRAIN_VARS = [
+    "X-averaged negative secondary particle strain-fatigue driver [s-1]",
+    "X-averaged negative secondary particle strain-fatigue cracking rate [m.s-1]",
+    "X-averaged negative secondary particle cracking rate [m.s-1]",
+] if os.environ.get("C64_SI_STRAIN_CRACK_KV") else []
+os.environ.setdefault("C64_DIAG_EXTRA_VARS", "|".join([LLI_VAR] + CRACK_VARS + STRAIN_VARS))
 
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "high_temp_45C"))
-os.chdir(HERE)
+os.chdir(OUT)
 
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
@@ -91,7 +101,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 import cell064_degradation_fit_45C as m  # noqa: E402
 
-m.SCRIPT_DIR = HERE
+m.SCRIPT_DIR = OUT
 CELL = (m.REAL_CELL_DIR_NAME.split("_")[0] if m.REAL_CELL_DIR_NAME
         else "CELL064" if T_ARG == "25" else "CELL017")
 T_LABEL = "45" if T_ARG == "45" else "25"
@@ -105,7 +115,7 @@ def real(name):
         return m.load_cell017(name)
     return {"capacity_fade": m.load_experimental_capacity_fade, "LLI": m.load_experimental_lli,
             "LAM_derived": m.load_experimental_lam}[name]()
-CSV = os.path.join(HERE, f"rpt_curves_{TAG}.csv")
+CSV = os.path.join(OUT, f"rpt_curves_{TAG}.csv")
 DVDSOC_TRIM = 0.01  # model DoD below this is dropped from dV/d(SOC) only
 
 
@@ -146,7 +156,8 @@ def print_lli_lam_checks(sol, results):
         if 0 < e <= efc_full[-1]:
             print(f"  EFC={e:.1f}: LLI real={r:.1f}% model={np.interp(e, efc_full, lli):.1f}% | "
                   f"Gr real={row['LAM_NE_graphite_pct']:.1f}% model={np.interp(row['efc'], efc_lam, results['LAM_gr']):.1f}% | "
-                  f"Si real={row['LAM_NE_silicon_pct']:.1f}% model={np.interp(row['efc'], efc_lam, results['LAM_si']):.1f}%",
+                  f"Si real={row['LAM_NE_silicon_pct']:.1f}% model={np.interp(row['efc'], efc_lam, results['LAM_si']):.1f}% | "
+                  f"PE real={row['LAM_PE_pct']:.1f}% model={np.interp(row['efc'], efc_lam, results['LAM_pos']):.1f}%",
                   flush=True)
 
 
@@ -175,18 +186,38 @@ def plot_crack_diagnostics(sol, results):
         i = int(np.argmin(np.abs(efc - e)))
         print(f"  EFC {e:6.1f}: l/l0 {l_cr[i] / l_cr[0]:7.3f}  rough {rough[i]:6.3f}  eps {eps[i]:.4f}  "
               f"LLI Si bulk {lli_b[i] * to_pct:5.2f}%  cracks {lli_c[i] * to_pct:5.2f}%", flush=True)
-    fig, ax = plt.subplots(2, 2, figsize=(11, 7.5))
+    strain = None
+    if STRAIN_VARS:
+        try:
+            t = sol["Time [s]"].entries
+            drv, dl_v, dl_tot = (np.asarray(sol[n].entries, dtype=float) for n in STRAIN_VARS)
+            cum = lambda y: np.concatenate([[0.0], np.cumsum(0.5 * (y[1:] + y[:-1]) * np.diff(t))])  # noqa: E731
+            strain = dict(E=cum(drv), dl_v=cum(dl_v), dl_a=cum(dl_tot - dl_v))
+            print("Route-B diagnostics at each model RPT (EFC, cumulative Si strain E, "
+                  "crack growth from Paris / strain [nm]):", flush=True)
+            for e in m.efc_from_throughput(np.asarray(results["rpt_thr"], dtype=float)):
+                i = int(np.argmin(np.abs(efc - e)))
+                print(f"  EFC {e:6.1f}: E {strain['E'][i]:8.2f}  dl Paris {1e9 * strain['dl_a'][i]:8.2f}  "
+                      f"dl strain {1e9 * strain['dl_v'][i]:8.2f}", flush=True)
+        except Exception as exc:  # noqa: BLE001
+            print(f"route-B diagnostics unavailable: {exc}", flush=True)
+    fig, ax = plt.subplots(3 if strain else 2, 2, figsize=(11, 11 if strain else 7.5))
     ax[0, 0].plot(efc, l_cr / l_cr[0]); ax[0, 0].set_ylabel("Si crack length / initial [-]")
     ax2 = ax[0, 0].twinx(); ax2.plot(efc, rough, color="tab:red", lw=1); ax2.set_ylabel("roughness ratio", color="tab:red")
     ax[0, 1].plot(cyc_efc, cyc_sig, ".", ms=3); ax[0, 1].set_ylabel("peak |Si surface tangential stress| per cycle [MPa]")
     ax[1, 0].plot(efc, eps); ax[1, 0].set_ylabel("X-averaged negative porosity [-]")
     ax[1, 1].plot(efc, lli_b * to_pct, label="Si SEI (bulk)"); ax[1, 1].plot(efc, lli_c * to_pct, label="Si SEI on cracks")
     ax[1, 1].set_ylabel("LLI [% of nominal]"); ax[1, 1].legend()
+    if strain:
+        ax[2, 0].plot(efc, strain["E"]); ax[2, 0].set_ylabel("cumulative Si strain driver E [-]")
+        ax[2, 1].plot(efc, 1e9 * strain["dl_a"], label="route A (Paris)")
+        ax[2, 1].plot(efc, 1e9 * strain["dl_v"], label="route B (strain fatigue)")
+        ax[2, 1].set_ylabel("cumulative crack growth [nm]"); ax[2, 1].legend()
     for a in ax.flat:
         a.set_xlabel("EFC [-]"); a.grid(alpha=0.3)
     fig.suptitle(f"Si crack / porosity diagnostics ({TAG})")
     fig.tight_layout()
-    out = os.path.join(HERE, f"crack_diagnostics_{TAG}.png")
+    out = os.path.join(OUT, f"crack_diagnostics_{TAG}.png")
     fig.savefig(out, dpi=130)
     print("Saved:", out, flush=True)
 
@@ -200,7 +231,7 @@ def simulate():
         sol = m.run_degradation()
     results = m.extract_results(sol)
     import pickle
-    with open(os.path.join(HERE, f"results_{TAG}.pkl"), "wb") as fh:  # for re-plotting without re-simulating
+    with open(os.path.join(OUT, f"results_{TAG}.pkl"), "wb") as fh:  # for re-plotting without re-simulating
         pickle.dump(results, fh)
     curves = list(results["rpt_voltage_curves"])  # plot_all can empty results lists
     m.plot_all(results, sol)  # standard summary plots + scores
@@ -265,7 +296,7 @@ def plot_rpts():
             ax.set_visible(False)
         fig.suptitle(title.format("discharge" if kind == "voltage" else "dV/d(SOC)"))
         fig.tight_layout()
-        out = os.path.join(HERE, f"rpt_{'voltage' if kind == 'voltage' else 'dvdsoc'}_dod_{TAG}.png")
+        out = os.path.join(OUT, f"rpt_{'voltage' if kind == 'voltage' else 'dvdsoc'}_dod_{TAG}.png")
         fig.savefig(out, dpi=150)
         print("Saved:", out, flush=True)
 

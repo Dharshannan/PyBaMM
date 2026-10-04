@@ -120,6 +120,14 @@ class CrackPropagation(BaseMechanics):
         stress_eff = stress_t_surf * stress_relief
         dK_SIF = stress_eff * b_cr * pybamm.sqrt(np.pi * l_cr) * (stress_eff >= 0)
         dl_cr = k_cr * (dK_SIF ** m_cr) / 3600
+        # The strain-fatigue term (if on) is added in set_rhs, not here. It
+        # needs the particle rhs, which (with stress-driven diffusion) needs
+        # this submodel's stresses. A KeyError here would defer this submodel
+        # in build_coupled_variables AFTER its thickness variables were
+        # written to the shared dict, and the retry would then run after the
+        # pore-buffering porosity submodel and overwrite its buffered
+        # thickness change with the unbuffered one (found 2026-10-04: the
+        # CELL009 expansion hump vanished with route B on).
         variables.update(
             {
                 f"{Domain} {phase_name}particle cracking rate [m.s-1]": dl_cr,
@@ -129,6 +137,100 @@ class CrackPropagation(BaseMechanics):
             }
         )
         return variables
+
+    def _strain_fatigue_cracking_rate(self, variables, l_cr):
+        """Volume-change (strain) fatigue crack growth, added on top of the
+        Paris law when "particle cracking growth" includes "strain fatigue":
+
+            dl/dt|_V = k_V(T) * D(d eps_V/dt) * l * (1 - l/R),
+            eps_V = ln t(sto_rav),
+            d eps_V/dt = (dt/dsto / t) * d sto_rav/dt,
+
+        with D = |.| ("Paris + strain fatigue") or max(-., 0) (contraction
+        only). t is the phase's volume RATIO V/V0: the fitted 1 + 3*sto**n_eff
+        when "volume change aging deformation" is on (as in base_mechanics),
+        else 1 + t_change(sto) (literature t_change is dV/V0). d sto_rav/dt is the r-average of the
+        particle rhs over c_max; dt/dsto is a central difference (avoids the
+        sto**(n-1) singularity of the power law at sto = 0). Called from
+        set_rhs, where every coupled variable exists; it also overwrites the
+        total cracking-rate variables with Paris + strain. Returns None
+        when the option is "Paris" (default)."""
+        domain, Domain = self.domain_Domain
+        phase_name = self.phase_param.phase_name
+        phase_options = getattr(getattr(self.options, domain), self.phase)
+        growth = phase_options["particle cracking growth"]
+        if growth == "Paris":
+            return None
+        if self.size_distribution or self.x_average:
+            raise NotImplementedError(
+                "strain-fatigue cracking is only implemented for x-resolved "
+                "models without particle-size distributions"
+            )
+        phase_param = self.phase_param
+        T = variables[f"{Domain} electrode temperature [K]"]
+        R_typ = phase_param.R_typ
+        sto_rav = variables[f"R-averaged {domain} {phase_name}particle concentration"]
+        rhs = variables[f"{Domain} {phase_name}particle rhs [mol.m-3.s-1]"]
+        dsto_dt = pybamm.r_average(rhs) / phase_param.c_max
+
+        lam_option = phase_options["loss of active material"]
+        if phase_options["volume change aging deformation"] == "true" and (
+            "porosity" in lam_option
+        ):
+            eps_s = variables[
+                f"{Domain} electrode {phase_name}active material volume fraction"
+            ]
+            exp_bol = phase_param.volume_change_deform_exponent_bol
+            exp_end = phase_param.volume_change_deform_exponent_end
+            lam_frac = pybamm.minimum(
+                pybamm.maximum(1 - eps_s / phase_param.epsilon_s, 0), 1
+            )
+            n_eff = exp_bol + lam_frac * (exp_end - exp_bol)
+
+            def t_of(s):
+                return 1 + 3 * s**n_eff
+        else:
+            # The literature t_change(sto) functions give the relative volume
+            # CHANGE dV/V0 (e.g. ~0-0.1 for graphite), whereas the fitted law
+            # above is the volume RATIO V/V0; the log strain needs the ratio.
+
+            def t_of(s):
+                return 1 + phase_param.t_change(s)
+
+        # sto is clamped to [s_floor, 1]: the solver can overshoot past 0 at
+        # the end of a deep discharge (s**n -> NaN), and at exactly 0 the
+        # Jacobian of s**n_eff w.r.t. the (LAM-dependent) exponent,
+        # s**n * ln(s), is 0 * -inf = NaN, which stalls IDA.
+        delta = 1e-3
+        s_floor = 1e-6
+        s_c = pybamm.minimum(pybamm.maximum(sto_rav, s_floor), 1)
+        s_hi = pybamm.minimum(s_c + delta, 1)
+        s_lo = pybamm.maximum(s_c - delta, s_floor)
+        dt_ds = (t_of(s_hi) - t_of(s_lo)) / (s_hi - s_lo)
+        strain_rate = dt_ds / t_of(s_c) * dsto_dt
+        if growth == "Paris + strain fatigue (contraction)":
+            driver = pybamm.maximum(-strain_rate, 0)
+        else:
+            driver = pybamm.AbsoluteValue(strain_rate)
+        dl_cr_strain = (
+            phase_param.k_V(T) * driver * l_cr * pybamm.maximum(1 - l_cr / R_typ, 0)
+        )
+        variables.update(
+            {
+                f"{Domain} {phase_name}particle volumetric strain rate [s-1]": strain_rate,
+                f"X-averaged {domain} {phase_name}particle volumetric strain rate [s-1]": pybamm.x_average(
+                    strain_rate
+                ),
+                f"X-averaged {domain} {phase_name}particle strain-fatigue driver [s-1]": pybamm.x_average(
+                    driver
+                ),
+                f"{Domain} {phase_name}particle strain-fatigue cracking rate [m.s-1]": dl_cr_strain,
+                f"X-averaged {domain} {phase_name}particle strain-fatigue cracking rate [m.s-1]": pybamm.x_average(
+                    dl_cr_strain
+                ),
+            }
+        )
+        return dl_cr_strain
 
     def set_rhs(self, variables):
         domain, Domain = self.domain_Domain
@@ -153,6 +255,17 @@ class CrackPropagation(BaseMechanics):
             else:
                 l_cr = variables[f"{Domain} {phase_name}particle crack length [m]"]
             dl_cr = variables[f"{Domain} {phase_name}particle cracking rate [m.s-1]"]
+        dl_cr_strain = self._strain_fatigue_cracking_rate(variables, l_cr)
+        if dl_cr_strain is not None:
+            dl_cr = dl_cr + dl_cr_strain
+            variables.update(
+                {
+                    f"{Domain} {phase_name}particle cracking rate [m.s-1]": dl_cr,
+                    f"X-averaged {domain} {phase_name}particle cracking rate [m.s-1]": pybamm.x_average(
+                        dl_cr
+                    ),
+                }
+            )
         self.rhs = {l_cr: dl_cr}
 
     def set_initial_conditions(self, variables):

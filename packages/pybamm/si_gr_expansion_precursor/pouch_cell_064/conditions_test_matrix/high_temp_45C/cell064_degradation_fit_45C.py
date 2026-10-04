@@ -1458,7 +1458,36 @@ VOLUME_CHANGE_AGING_DEFORM_OPTION = (("false", "true" if SI_VOLUME_CHANGE_AGING_
 # C64_SI_STRESS_LAM_DAMP_EXP (e.g. 0.25) switches Si only to
 # remaining_frac ** exponent. Unset = unchanged behaviour.
 SI_STRESS_LAM_DAMP_EXP = os.environ.get("C64_SI_STRESS_LAM_DAMP_EXP")
-STRESS_LAM_DAMPING_OPTION = (("linear", "power" if SI_STRESS_LAM_DAMP_EXP else "linear"), "linear")
+# C64_POS_STRESS_LAM_DAMP_EXP (2026-10-04, branch test_volume_strain_cracking):
+# the same "power" damping on the cathode, (eps_s/eps_s0)**n on the stress
+# input, so the stress-driven cathode LAM saturates after an early loss (the
+# real LAM_PE is ~4-7% early, then flat). Unset = "linear" (unchanged).
+POS_STRESS_LAM_DAMP_EXP = os.environ.get("C64_POS_STRESS_LAM_DAMP_EXP")
+
+# Si strain-fatigue (volume-change) cracking, core option "particle cracking
+# growth" (CHANGES.md item 15, branch test_volume_strain_cracking): adds
+# k_V(T) * D(d ln V/dt) * l * (1 - l/R) on top of the Paris law, for Si only.
+#   C64_SI_STRAIN_CRACK_KV    k_V [-]; unset = off ("Paris", unchanged)
+#   C64_SI_STRAIN_CRACK_MODE  "contraction" (B2, default) or "abs" (B1)
+#   C64_SI_STRAIN_CRACK_EA    optional activation energy [J/mol]. SAME sign
+#                             convention as SI_CRACK_EAC / Ai2020 cracking:
+#                             exp[Ea/R (1/T - 1/298.15)], positive = SLOWER at
+#                             high T (lithiated Si more ductile). Changed
+#                             2026-10-05; the S3f runs tagged EV-80000..-120000
+#                             used the opposite sign, i.e. = +80..+120 kJ/mol here.
+SI_STRAIN_CRACK_KV = os.environ.get("C64_SI_STRAIN_CRACK_KV")
+SI_STRAIN_CRACK_MODE = os.environ.get("C64_SI_STRAIN_CRACK_MODE", "contraction")
+SI_STRAIN_CRACK_EA = float(os.environ.get("C64_SI_STRAIN_CRACK_EA", 0.0))
+_SI_STRAIN_OPTION = ("Paris + strain fatigue (contraction)" if SI_STRAIN_CRACK_MODE == "contraction"
+                     else "Paris + strain fatigue")
+CRACK_GROWTH_OPTION = (("Paris", _SI_STRAIN_OPTION if SI_STRAIN_CRACK_KV else "Paris"), "Paris")
+
+
+def _si_strain_crack_kv(T):
+    return float(SI_STRAIN_CRACK_KV) * pybamm.exp(
+        SI_STRAIN_CRACK_EA / 8.314 * (1 / T - 1 / 298.15))
+STRESS_LAM_DAMPING_OPTION = (("linear", "power" if SI_STRESS_LAM_DAMP_EXP else "linear"),
+                             "power" if POS_STRESS_LAM_DAMP_EXP else "linear")
 
 # Si isolation lithium trapping (CHANGES.md item 13, re-tested 2026-09-30 on
 # the fixed crack-SEI core): isolated Si carries an extra theta*(c_max - c_avg)
@@ -1525,6 +1554,7 @@ MODEL_OPTIONS_BASE = {
     "OCP aging deformation driver": OCP_DEFORM_DRIVER,
     "volume change aging deformation": VOLUME_CHANGE_AGING_DEFORM_OPTION,
     "stress-driven LAM damping": STRESS_LAM_DAMPING_OPTION,
+    "particle cracking growth": CRACK_GROWTH_OPTION,
     "isolation lithium trapping": ISO_LI_TRAP_OPTION,
     "active material expansion residual": LAM_EXPANSION_RESIDUAL_OPTION,
     "thermal": THERMAL_OPTION,
@@ -1937,6 +1967,10 @@ PARAM_UPDATES = {
     "Secondary: Negative electrode cracking rate": _silicon_cracking_rate_scaled,
     **({"Secondary: Negative electrode stress-driven LAM damping exponent": float(SI_STRESS_LAM_DAMP_EXP)}
        if SI_STRESS_LAM_DAMP_EXP else {}),
+    **({"Positive electrode stress-driven LAM damping exponent": float(POS_STRESS_LAM_DAMP_EXP)}
+       if POS_STRESS_LAM_DAMP_EXP else {}),
+    **({"Secondary: Negative electrode strain-fatigue cracking constant": _si_strain_crack_kv}
+       if SI_STRAIN_CRACK_KV else {}),
     **({"Secondary: Negative electrode isolation lithium trapping fraction":
         min(float(SI_ISO_LI_TRAP) * _yield_arrhenius(SI_ISO_LI_TRAP_EAC), 1.0)}
        if SI_ISO_LI_TRAP else {}),
@@ -1969,7 +2003,11 @@ PARAM_UPDATES = {
     "Primary: Negative electrode critical stress [Pa]": GR_CRIT_STRESS,
     "Primary: Negative electrode cracking rate": BASE_CRACK_RATE * GR_CRACK_RATE_MULT,
     "Negative electrode porosity floor": NEG_POROSITY_FLOOR,
-    "Positive electrode LAM constant proportional term [s-1]": BASE_POS_LAM_BETA * POS_LAM_MULT,
+    # C64_POS_LAM_EAC [J/mol]: isothermal Arrhenius on the cathode LAM rate,
+    # evaluated at the operating T like the redirect yields (exactly 1 at
+    # 25 degC; positive = faster at high T). Default 0 = unchanged.
+    "Positive electrode LAM constant proportional term [s-1]": BASE_POS_LAM_BETA * POS_LAM_MULT
+    * _yield_arrhenius(float(os.environ.get("C64_POS_LAM_EAC", 0.0))),
     "Primary: SEI reaction exponent cap": EXPONENT_MAX_SEI,
     "Secondary: SEI reaction exponent cap": EXPONENT_MAX_SEI,
     "Negative electrode pore buffering transition width": WIDTH_BASELINE,

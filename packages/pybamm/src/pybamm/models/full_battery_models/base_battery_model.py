@@ -242,6 +242,19 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 feeds the reported "Cell thickness change [m]", not the
                 stress/degradation physics, so this is a low-risk,
                 diagnostic-output-only change.
+            * "particle cracking growth" : str
+                Crack-growth law when "particle mechanics" is "swelling and
+                cracking". "Paris" (default): Paris law on the
+                diffusion-induced surface tangential stress (unchanged).
+                "Paris + strain fatigue": adds a volume-change fatigue term
+                k_V(T) * |d eps_V/dt| * l * (1 - l/R), with eps_V = ln
+                t_change(sto_rav) the particle's volumetric log strain.
+                "Paris + strain fatigue (contraction)": the same term driven
+                by contraction only, max(-d eps_V/dt, 0) (the particle surface
+                is tensile while delithiating). k_V is "...strain-fatigue
+                cracking constant" (dimensionless, function of temperature).
+                Can be a per-phase 2-tuple. Not implemented for particle-size
+                distributions or x-averaged (SPM/SPMe) models.
             * "stress-driven LAM damping" : str
                 Can be "linear" (default) or "power". Stress-driven LAM feeds
                 its power law with stress_h * remaining_frac (eps_s/eps_s0),
@@ -501,6 +514,11 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "OCP aging deformation driver": ["LAM fraction", "throughput"],
             "volume change aging deformation": ["false", "true"],
             "stress-driven LAM damping": ["linear", "power"],
+            "particle cracking growth": [
+                "Paris",
+                "Paris + strain fatigue",
+                "Paris + strain fatigue (contraction)",
+            ],
             "isolation lithium trapping": ["false", "true"],
             "active material expansion residual": ["false", "true"],
             "lithium plating": [
@@ -610,6 +628,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "OCP aging deformation driver": "LAM fraction",
             "volume change aging deformation": "false",
             "stress-driven LAM damping": "linear",
+            "particle cracking growth": "Paris",
             "isolation lithium trapping": "false",
             "active material expansion residual": "false",
             "lithium plating": "none",
@@ -1079,6 +1098,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                         "SEI on cracks",
                         "stress-induced diffusion",
                         "stress-driven LAM damping",
+                        "particle cracking growth",
                         "isolation lithium trapping",
                         "volume change aging deformation",
                     ]

@@ -728,6 +728,19 @@ class ParticleLithiumIonParameters(BaseParameters):
             inputs,
         )
 
+    def k_V(self, T):
+        """
+        Strain-fatigue cracking constant [-] (fractional crack growth per unit
+        volumetric log strain); only used when "particle cracking growth"
+        includes "strain fatigue". A function of temperature like k_cr.
+        """
+        phase_prefactor = self.phase_prefactor
+        Domain = self.domain.capitalize()
+        return pybamm.FunctionParameter(
+            f"{phase_prefactor}{Domain} electrode strain-fatigue cracking constant",
+            {"Temperature [K]": T},
+        )
+
     def k_cr(self, T):
         """
         Cracking rate for the electrode;

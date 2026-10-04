@@ -123,7 +123,9 @@ sit high or low, rests.
 - **$k_V$** (dimensionless): fractional crack growth per unit log-strain.
   Default: no temperature dependence. Optionally
   $k_V = k_{V,0}\exp[E_V/R\,(1/T - 1/T_{\mathrm{ref}})]$, to test whether any
-  is needed.
+  is needed. $T_{\mathrm{ref}}$ = 298.15 K. This is the same sign convention
+  as route A's $E_{\mathrm{cr}}$ (`SI_CRACK_EAC`, Ai2020): $E_V > 0$ is
+  SLOWER when hot (lithiated Si more ductile).
 - **$l(1 - l/R)$:** self-similar growth that reuses the existing cap, so
   cracks stop at the particle radius.
 
@@ -285,8 +287,9 @@ is the existing power-law damping. Both are in section 10.1.
 - **If it knees early:** route A is too strong at 45 °C without the Arrhenius
   slowdown. Lower the shared Paris $k_{\mathrm{cr}}$ (or raise $m_{\mathrm{cr}}$,
   which suppresses the lower 45 °C stress more), then go to step 4.
-- **If it knees late:** add a mild positive $E_V$, as the first sign that
+- **If it knees late:** add a mild negative $E_V$ (faster when hot), as the first sign that
   route B needs temperature dependence.
+- **Result (S3c, 2026-10-05): it knees ~100 EFC early, even with route A slowed by `SI_CRACK_EAC` = 90k.** Route A is then negligible at 45 °C (13 nm vs 76 nm from route B). Route B alone (l/l0 ≈ 2 by EFC 245) drives the porosity to its floor via crack SEI. So route B needs a positive $E_V$ (slower when hot, the same direction and physics as route A's `SI_CRACK_EAC` = 90 kJ/mol): ~+100 kJ/mol is being swept (S3f).
 
 **Step 4: CELL064 at 25 °C.**
 - **Target:** route A + route B knee at ~101.
@@ -467,6 +470,41 @@ higher $\beta_p$. The rate collapses after a few percent of loss, so this
 also plateaus. It is less physical, since the saturation is tied to the
 amount lost rather than to crack relief, but it is a parameter-only test of
 whether a plateau law fits all three cells.
+
+**Stage-1 test result (2026-10-04, si_volume_cracks/PROGRESS.md).** The
+power-law damping does saturate the cathode LAM, but at nearly the same
+level in every condition:
+
+| Condition | Model plateau (n=50, β×120) | Real cathode LAM |
+|---|---|---|
+| 25 °C full | 6.6% | ~6.6% |
+| 25 °C 15–95% | 7.5% | ~4.2% |
+| 45 °C full | 6.4% | ~4.0% |
+
+The plateau depends only logarithmically on the stress rate, and a
+lower-stress condition simply runs more EFC. The crack-length-relief route
+would behave the same way: total LAM up to saturation is then nearly
+independent of the stress. The data instead show **a plateau that rises with
+how hard the cathode is stressed**: deep, slow 25 °C cycling is highest.
+
+**Candidate law (new mechanism, for review; not implemented): stress-threshold
+"weakest-particle" damage.** Cathode particles have a distribution of
+fracture strengths (Weibull). Damage is set by the peak stress reached, not
+by time:
+
+$$
+L_p^{\ast}(t) = L_{\max,p}\left[1 - \exp\!\left(-\left(\frac{\hat\sigma_{h,p}(t)}{\sigma_{0,p}}\right)^{w}\right)\right],
+\qquad
+\frac{dL_p}{dt} = \frac{\max(L_p^{\ast} - L_p,\ 0)}{\tau_p}.
+$$
+
+Here $\hat\sigma_{h,p}$ is the running maximum of the tensile hydrostatic
+surface stress (one extra state relaxing upward only), $w$ is the Weibull
+modulus, and $\tau_p$ is short (a few cycles).
+- **Plateau set by stress:** the plateau is $L_{\max}F(\hat\sigma)$, so the
+  lower-stress conditions (45 °C, the 4.15 V-top partial window) plateau
+  lower, as observed.
+- **Fit:** three shared parameters, $L_{\max,p}$, $\sigma_{0,p}$ and $w$.
 
 ### 10.2 Width remains a per-condition calibration
 

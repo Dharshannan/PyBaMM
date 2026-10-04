@@ -753,6 +753,101 @@ SEI on cracks, from `d7c2827c2` onwards, carries the error. That includes
 
 ---
 
+## 15. `"particle cracking growth"` option: strain-fatigue crack growth (new, 2026-10-04, branch `test_volume_strain_cracking`)
+
+**What.** An opt-in, per-phase crack-growth term driven by the particle's
+volumetric strain (route B), added on top of the existing Paris law on the
+diffusion-induced tangential stress (route A):
+
+$$
+\frac{dl}{dt} = \underbrace{\frac{k_{\mathrm{cr}}(T)}{3600}\big(\sigma_{t,\mathrm{eff}}\, b_{\mathrm{cr}}\sqrt{\pi l}\big)^{m_{\mathrm{cr}}}}_{\text{Paris (unchanged)}}
++ \underbrace{k_V(T)\, D(\dot\varepsilon_V)\, l\left(1 - \frac{l}{R}\right)}_{\text{strain fatigue}},
+\qquad
+\varepsilon_V = \ln \frac{V}{V_0}(\bar s),
+\qquad
+\dot\varepsilon_V = \frac{(V/V_0)'}{V/V_0}\,\frac{d\bar s}{dt}.
+$$
+
+**Options.** `"particle cracking growth"`:
+- `"Paris"`: the default; the model is unchanged.
+- `"Paris + strain fatigue"`: $D = |\dot\varepsilon_V|$.
+- `"Paris + strain fatigue (contraction)"`: $D = \max(-\dot\varepsilon_V, 0)$,
+  delithiation only, when the surface is tensile.
+
+**Volume ratio $V/V_0$:**
+- With `"volume change aging deformation"` on: the fitted
+  $1 + 3\bar s^{\,n_{\mathrm{eff}}}$.
+- Otherwise: $1 + $ `t_change`$(\bar s)$, because the literature `t_change`
+  functions give $\Delta V/V_0$.
+
+**Numerics:**
+- $d\bar s/dt$ is the r-average of the particle rhs over $c_{\max}$, so no
+  new state is added.
+- $(V/V_0)'$ is a central difference with $\delta = 10^{-3}$.
+- $\bar s$ is clamped to $[10^{-6}, 1]$. At exactly 0, the Jacobian of
+  $\bar s^{\,n_{\mathrm{eff}}}$ with respect to the LAM-dependent exponent is
+  $0 \cdot (-\infty)$ = NaN, which stalls IDA at the end of deep discharges.
+  This was found in testing.
+
+**Where it is added (build-order fix, 2026-10-04).** The strain term is added
+to the crack-length rhs in `CrackPropagation.set_rhs`, not in
+`get_coupled_variables`. It needs the particle rhs, which (with stress-driven
+diffusion) needs this submodel's stresses. The first version looked it up in
+`get_coupled_variables`, after the mechanics had already written its thickness
+change into the shared variables dict. The resulting KeyError deferred the
+submodel, and its retry ran after the pore-buffering porosity submodel. That
+retry overwrote the buffered "Negative electrode / Cell thickness change"
+with the unbuffered values:
+- CELL009 per-cycle swing: 11.9 µm instead of 7.4 µm, so the expansion hump
+  disappeared;
+- the degradation trajectories were essentially unaffected.
+
+In `set_rhs` every coupled variable exists. The total cracking-rate variables
+are overwritten there with Paris + strain.
+
+`reaction_driven_porosity.py` now also raises KeyError, so it is retried
+instead of silently skipping pore buffering, when the negative electrode has
+particle mechanics but no thickness change has been produced yet.
+
+Check: CELL009 window, 10 cycles. The swing is 7.3 µm/cycle with route B on
+and off.
+
+**Parameter.** `"{Phase}: {Domain} electrode strain-fatigue cracking constant"`:
+- dimensionless, a function of temperature (like `"... cracking rate"`);
+- needed only when the option is not `"Paris"`.
+
+**Output variables:**
+- `"{Domain} {phase}particle volumetric strain rate [s-1]"`;
+- `"X-averaged {domain} {phase}particle strain-fatigue driver [s-1]"`;
+- `"{Domain} {phase}particle strain-fatigue cracking rate [m.s-1]"` (the
+  route-B part of the total cracking rate).
+
+**Files:**
+- `src/pybamm/models/submodels/particle_mechanics/crack_propagation.py`
+  (`_strain_fatigue_cracking_rate`, called from `set_rhs`);
+- `src/pybamm/models/submodels/porosity/reaction_driven_porosity.py`
+  (pore-buffering deferral guard);
+- `src/pybamm/parameters/lithium_ion_parameters.py` (`k_V`);
+- `src/pybamm/models/full_battery_models/base_battery_model.py` (option,
+  per-phase).
+
+**Limitations.** Particle-size distributions and x-averaged models (SPM,
+SPMe) raise `NotImplementedError`.
+
+**Checks** (OKane2022 graphite DFN, 2 × 1C cycles):
+- the Paris-only result is unchanged with the option off;
+- the cumulative $|\dot\varepsilon_V|$ is ~0.06 per half-cycle, i.e. a ~6%
+  graphite volume swing;
+- the extra crack growth equals $k_V \times$ the cumulative strain, for both
+  B1 and B2 (B2 ≈ half of B1).
+
+In the fork: full-window Si at 25 °C accumulates ~1.5 contraction strain per
+EFC (≈ ln 4 for a full Si swing).
+
+**Motivation and plan.** `study_si_deg/PROPOSAL_strain_driven_cracking.md`.
+
+---
+
 ## Open items / not yet done
 
 - Pore-buffering pressure-coupling phase (plan §3/§4/Change 5) — deferred.
