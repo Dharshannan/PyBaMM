@@ -572,6 +572,16 @@ class ParticleLithiumIonParameters(BaseParameters):
         self.stress_critical = pybamm.Parameter(
             f"{pref}{Domain} electrode critical stress [Pa]"
         )
+        # Only referenced when "stress-driven LAM damping" is "power" -- see
+        # loss_active_material.py; exponent on the remaining-fraction damper.
+        self.stress_lam_damping_exponent = pybamm.Parameter(
+            f"{pref}{Domain} electrode stress-driven LAM damping exponent"
+        )
+        # Only referenced when "isolation lithium trapping" is "true" -- see
+        # particle/fickian_diffusion.py; theta in [0, 1].
+        self.isolation_li_trap_fraction = pybamm.Parameter(
+            f"{pref}{Domain} electrode isolation lithium trapping fraction"
+        )
         self.beta_LAM_sei = pybamm.Parameter(
             f"{pref}{Domain} electrode reaction-driven LAM factor [m3.mol-1]"
         )

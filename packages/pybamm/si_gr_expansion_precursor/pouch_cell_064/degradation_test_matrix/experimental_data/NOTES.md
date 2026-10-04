@@ -57,3 +57,66 @@ not measurement.
 - **`CELL064_LAM_derived_highrate.csv`**, **`CELL064_k_expansion_scale_highrate_all.csv`**
   -- denser high-rate-neighbor-resolution versions of the above, referenced
   to their own first point (different rate/fit conditions) -- context only.
+
+# CELL017 (45 degC) experimental set — `CELL017_45C/`
+
+CELL017 is at 45 degC and 103 kPa / 15 psi, the same pressure as CELL064. It
+was built from the IC_PYBAMM_FIG1 data package (v1, 2026-09-27) by
+`build_cell017_45C_data.py`, in the same file formats as the CELL064 files
+above:
+- `CELL017_capacity_fade.csv`
+- `CELL017_LLI.csv`
+- `CELL017_LAM_derived.csv`
+- `CELL017_k_expansion_scale.csv`
+- `CELL017_reversible_expansion.csv`
+- `low_rate_c20/` (RPT0-7 C/20 discharges)
+
+The high_temp_45C fork overlays and scores all of them at 318.15 K
+(`load_cell017()`). Differences forced by what the package contains:
+
+- **Reference RPT.** RPT0 (EFC 6.6) is a 25 degC pre-characterisation, so
+  RPT1 (EFC 8.72) is the reference and zero, like CELL064's RPT1. All 8 RPTs
+  have valid C/20 fits; there are no high-rate substitutes.
+- **LLI.** This is the package's common `LLI_Ah` (x_start*Cn_total + y_start*Cp,
+  from the discharge fit). CELL064's `charge_LLI` came from a charge-curve fit
+  that isn't shipped; the two definitions agree within ~1-5% on CELL064.
+- **Reversible expansion.** Per-cycle discharge-swing amplitude from the
+  lifetime pickle, via `extract_lifetime_reversible_expansion.py`. Validated on
+  CELL064 against its own pipeline output: median -2.9%, correlation 0.92.
+- **Knee.** The manifest capacity knee is at EFC 318.9 raw (~310 since RPT1);
+  the expansion transition is at 297.1.
+- `CELL017_45C_capacity_fade.csv` (top level) is the user's earlier quick
+  capacity/2.5 Ah overlay, superseded by the folder above.
+
+## Partial-SoC-window cells: CELL009 (15-95%) and CELL026 (20-80%), 25 degC, 103 kPa
+
+Built by `build_partial_soc_data.py` from the same package, into
+`CELL009_25C_15-95/` and `CELL026_25C_20-80/`, in the CELL017 formats plus
+`CELLxxx_cycling_protocol.json`.
+- **Which cells.** The manifest's partial-window cells are CELL009 and CELL054
+  (15-95%) and CELL026 (20-80%). CELL025 is a 45 degC / 103 kPa cell, a twin
+  of CELL017. CELL054 is skipped because its data is incomplete.
+- **Reference RPT.** RPT1 is the reference and zero. k at RPT1 is 0.705
+  (CELL009) and 0.708 (CELL026), so F0 = 0.70, the same as CELL064.
+- **Capacity-only RPTs.** CELL009 RPT2/4 and CELL026 RPT2/3/5 have no eSoH
+  fit: they are marked invalid only for missing raw expansion. Their C/20
+  capacity (QC `v_q_span_Ah`) is kept in `capacity_fade` (`esoh_fit` =
+  False), but they have no LLI/LAM/k rows and no curve files.
+- **Ageing control** (detected from the lifetime data, constant over life):
+  - **CELL009:** C/3 CC-CV charge to 4.150 V (CV to ~14 mA), then C/3 CC
+    discharge to 3.140 V. Voltage-limited at both ends; the Ah per discharge
+    falls from 1.94 to ~0.94 Ah with ageing.
+  - **CELL026:** C/3 CC-CV charge to 3.969 V (CV to ~14 mA), then a C/3
+    discharge of a fixed 1.500 Ah (coulomb counting, 60% of 2.5 Ah) with a
+    2.5 V safety floor. The discharge end voltage drifts from 3.18 V down to
+    the 2.5 V floor after the knee, and the Ah per cycle then drops (0.87,
+    then 0.68 Ah).
+- **Knees.** The manifest capacity knees are at EFC 298.2 (CELL009) and
+  301.4 (CELL026), about twice CELL064's.
+- **eSoH noise.** CELL026's graphite LAM is negative (−8 to −11%) at RPT0/4/6.
+  Its RPT1 Cn_Gr (1.368 Ah) is low compared with the others (1.48-1.52), so
+  treat CELL026's Gr LAM as noisy.
+- **EFC basis.** Every package EFC, including CELL064's and CELL017's, is
+  throughput / (2 x 2.5 Ah). The model's `efc_from_throughput` divides by
+  2 x 2.5947 Ah, so at equal EFC the model has ~3.8% more throughput. That
+  convention is used unchanged throughout the fits so far.

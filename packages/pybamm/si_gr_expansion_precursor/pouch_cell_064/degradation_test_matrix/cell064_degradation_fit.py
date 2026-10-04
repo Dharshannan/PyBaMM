@@ -1821,7 +1821,83 @@ EFC_LIMIT = float(os.environ.get("C64_EFC_LIMIT", "inf"))  # optional third stop
 # tolerance. Reverted to the original 1e-06 per instruction; the "weird
 # points" issue is still open and not yet attributed to solver tolerance.
 SOLVER_TOL = float(os.environ.get("C64_SOLVER_TOL", 1e-06))
-solver = pybamm.IDAKLUSolver(root_tol=SOLVER_TOL, atol=SOLVER_TOL, rtol=SOLVER_TOL)
+# 2026-09-25 memory fix: pybamm.IDAKLUSolver's docstring is explicit that
+# "If none [output_variables] are specified then the complete state vector
+# is returned (can be very large)" -- this is almost certainly the main
+# driver of the multi-GB memory footprints (and the OOM kills) seen on long
+# (500-700 cycle) runs throughout the conditions_test_matrix investigation.
+# Restricting to exactly the variables this script's own post-processing
+# actually reads (audited directly from every sol[...]/cyc[...]/step[...]/
+# full_res_var(...) call in run_degradation/extract_results/the plot_*
+# functions below) should cut memory use substantially with zero change to
+# any existing output, since nothing downstream reads anything outside this
+# list on the normal (non-C64_DIAG_*) path. NOT combined with the solver's
+# separate store_first_last=True option -- that would break
+# rpt_discharge_curve()'s need for the FULL within-step V(Q) shape (used by
+# every RPT voltage/dV-dQ plot throughout this project), which only keeps
+# first/last per step.
+_CORE_OUTPUT_VARIABLES = [
+    "Current [A]",
+    "Discharge capacity [A.h]",
+    "Throughput capacity [A.h]",
+    "Terminal voltage [V]",
+    "Cell thickness change [m]",
+    "Negative electrode transfer ratio k",
+    "Volume-averaged cell temperature [K]",
+    "Local ECM resistance [Ohm]",
+    "X-averaged negative primary particle surface stoichiometry",
+    "X-averaged negative secondary particle surface stoichiometry",
+    "Loss of active material in negative electrode [%]",
+    "Loss of active material in positive electrode [%]",
+    "Loss of active material in primary phase in negative electrode [%]",
+    "Loss of active material in secondary phase in negative electrode [%]",
+    "Total capacity lost to side reactions [A.h]",
+    "Loss of lithium due to loss of primary active material in negative electrode [mol]",
+    "Loss of lithium due to loss of secondary active material in negative electrode [mol]",
+    "Loss of lithium due to loss of active material in positive electrode [mol]",
+]
+# The C64_DIAG_* blocks in run_degradation() read a few extra variables not
+# needed on the normal path -- only pull those in (paying their memory cost)
+# when a diagnostic is actually requested, so the default path stays lean.
+if os.environ.get("C64_DIAG_POROSITY") == "1":
+    _CORE_OUTPUT_VARIABLES.append("Negative electrode porosity")
+if os.environ.get("C64_DIAG_STRESS") == "1":
+    _CORE_OUTPUT_VARIABLES += [
+        "X-averaged negative secondary particle surface tangential stress [Pa]",
+        "X-averaged negative secondary particle surface radial stress [Pa]",
+    ]
+if os.environ.get("C64_DIAG_A_J_SEI") == "1":
+    _CORE_OUTPUT_VARIABLES.append(
+        "X-averaged negative electrode secondary SEI volumetric interfacial current density [A.m-3]"
+    )
+# C64_DIAG_EPS reads "...eps_solid..."-style keys built from a dict of
+# candidate names inside run_degradation() itself -- left on the full-state
+# fallback (output_variables=[] equivalent) since auditing every candidate
+# key there is more error-prone than just accepting the memory cost on that
+# one, rarely-used diagnostic path.
+_RESTRICT_OUTPUT_VARIABLES = os.environ.get("C64_DIAG_EPS") != "1"
+
+# 2026-09-27: opt-in, OFF by default -- only first/last sample per experiment
+# step is stored (IDAKLUSolver's own store_first_last option), instead of
+# every internal solver timestep. Previously rejected (see the note above
+# about NOT combining this with output_variables) because it breaks
+# rpt_discharge_curve()'s need for the full within-step V(Q) shape used by
+# the "Discharge voltage vs RPT" panel and any dV/dQ analysis. For long runs
+# that only need SoH/EFC/LAM/LLI/expansion trajectories (not that one panel)
+# -- e.g. the narrow-voltage-window condition, which needs ~1200+ cycles to
+# reach a comparable EFC range and produced an unmanageable ~55GB pickled
+# solution without this -- turning it on trades that panel away for a large
+# memory reduction. cycle_expansion_ptp_um/cycle_k_peak's within-cycle
+# max/min still work (approximately -- first/last per step, not the true
+# continuous extremum) since thickness/k extrema in this model occur close
+# to step boundaries in practice.
+_STORE_FIRST_LAST = os.environ.get("C64_STORE_FIRST_LAST") == "1"
+
+solver = pybamm.IDAKLUSolver(
+    root_tol=SOLVER_TOL, atol=SOLVER_TOL, rtol=SOLVER_TOL,
+    output_variables=_CORE_OUTPUT_VARIABLES if _RESTRICT_OUTPUT_VARIABLES else None,
+    store_first_last=_STORE_FIRST_LAST,
+)
 
 formation_exp = pybamm.Experiment(
     [
@@ -2016,7 +2092,11 @@ def run_degradation():
         for attempt, tol_mult in enumerate([1.0] + RETRY_TOL_MULTIPLIERS):
             try_tol = SOLVER_TOL * tol_mult
             this_solver = (solver if tol_mult == 1.0
-                           else pybamm.IDAKLUSolver(root_tol=try_tol, atol=try_tol, rtol=try_tol))
+                           else pybamm.IDAKLUSolver(
+                               root_tol=try_tol, atol=try_tol, rtol=try_tol,
+                               output_variables=_CORE_OUTPUT_VARIABLES if _RESTRICT_OUTPUT_VARIABLES else None,
+                               store_first_last=_STORE_FIRST_LAST,
+                           ))
             sim = make_sim(ageing_batch_exp, this_solver)
             try:
                 new_sol = sim.solve(starting_solution=last_sol)
@@ -2564,8 +2644,9 @@ def _plot_lam(ax, results, exp_lam, sim_efc_full, combined_with_lli=False, exp_l
         ax.plot(sim_efc_full, LLI_pct, color="crimson", ls="--", label="Model LLI (side reactions only)")
         ax.plot(sim_efc_full, LLI_corrected_pct, color="crimson", ls="-",
                 label="Model LLI (side reactions + LAM-trapped Li)")
-        exp_lli_pct = 100 * exp_lli["charge_LLI_loss"] / exp_lli["charge_LLI"].iloc[0]
-        ax.scatter(exp_lli["efc"], exp_lli_pct, color="crimson", marker="D", label="Exp. LLI")
+        if exp_lli is not None and not exp_lli.empty:
+            exp_lli_pct = 100 * exp_lli["charge_LLI_loss"] / exp_lli["charge_LLI"].iloc[0]
+            ax.scatter(exp_lli["efc"], exp_lli_pct, color="crimson", marker="D", label="Exp. LLI")
         ax.set_ylabel("LAM / LLI [%]")
         ax.set_title("LAM by phase + LLI: model vs. experimental")
     else:
@@ -2582,9 +2663,10 @@ def _plot_lli(ax, results, exp_lli, sim_efc_full):
     ax.plot(sim_efc_full, LLI_pct, color="crimson", ls="--", label="Model LLI (side reactions only)")
     ax.plot(sim_efc_full, LLI_corrected_pct, color="crimson", ls="-",
             label="Model LLI (side reactions + LAM-trapped Li)")
-    exp_lli_pct = 100 * exp_lli["charge_LLI_loss"] / exp_lli["charge_LLI"].iloc[0]
-    ax.scatter(exp_lli["efc"], exp_lli_pct, color="crimson", marker="s",
-               label="Exp. charge_LLI_loss (source-package fit)")
+    if exp_lli is not None and not exp_lli.empty:
+        exp_lli_pct = 100 * exp_lli["charge_LLI_loss"] / exp_lli["charge_LLI"].iloc[0]
+        ax.scatter(exp_lli["efc"], exp_lli_pct, color="crimson", marker="s",
+                   label="Exp. charge_LLI_loss (source-package fit)")
     ax.set_xlabel("EFC [-]")
     ax.set_ylabel("LLI [%]")
     ax.set_title("LLI: model vs. experimental (side-rxn-only vs. +LAM-trapped)")

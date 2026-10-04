@@ -242,6 +242,28 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 feeds the reported "Cell thickness change [m]", not the
                 stress/degradation physics, so this is a low-risk,
                 diagnostic-output-only change.
+            * "stress-driven LAM damping" : str
+                Can be "linear" (default) or "power". Stress-driven LAM feeds
+                its power law with stress_h * remaining_frac (eps_s/eps_s0),
+                a damper added to stop a stress singularity near full
+                depletion. "linear" is that damper as-is; "power" uses
+                remaining_frac ** "...stress-driven LAM damping exponent", so
+                an exponent < 1 keeps the damper at depletion but lets a
+                genuine post-knee stress rise (load concentrating on the
+                surviving material) accelerate LAM instead of being cancelled
+                by it. Can be a per-phase 2-tuple.
+            * "isolation lithium trapping" : str
+                Can be "false" (default) or "true". When "true" and the
+                phase's LAM option includes "porosity isolation", material
+                lost to isolation removes, on top of its current r-averaged
+                lithium c_avg, an extra theta*(c_max - c_avg) of lithium
+                from the remaining active particles, with theta =
+                "...isolation lithium trapping fraction" (0 = current
+                bookkeeping, 1 = isolated material leaves fully lithiated).
+                Represents isolation biased towards the lithiated state
+                (pores tightest when Si is most swollen) and Li trapping in
+                near-isolated Si. A pure inventory sink: no current, no SEI
+                film, no porosity change. Can be a per-phase 2-tuple.
             * "active material expansion residual" : str
                 Can be "false" (default) or "true". When "true" and "loss of
                 active material" includes "porosity isolation" for a phase,
@@ -478,6 +500,8 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "open-circuit potential aging deformation": ["false", "true"],
             "OCP aging deformation driver": ["LAM fraction", "throughput"],
             "volume change aging deformation": ["false", "true"],
+            "stress-driven LAM damping": ["linear", "power"],
+            "isolation lithium trapping": ["false", "true"],
             "active material expansion residual": ["false", "true"],
             "lithium plating": [
                 "none",
@@ -585,6 +609,8 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "open-circuit potential aging deformation": "false",
             "OCP aging deformation driver": "LAM fraction",
             "volume change aging deformation": "false",
+            "stress-driven LAM damping": "linear",
+            "isolation lithium trapping": "false",
             "active material expansion residual": "false",
             "lithium plating": "none",
             "lithium plating porosity change": "false",
@@ -1044,6 +1070,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                         "loss of active material",
                         "number of MSMR reactions",
                         "open-circuit potential",
+                        "open-circuit potential aging deformation",
                         "particle",
                         "particle mechanics",
                         "particle phases",
@@ -1051,6 +1078,9 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                         "SEI",
                         "SEI on cracks",
                         "stress-induced diffusion",
+                        "stress-driven LAM damping",
+                        "isolation lithium trapping",
+                        "volume change aging deformation",
                     ]
                     and isinstance(value, tuple)
                     and len(value) == 2

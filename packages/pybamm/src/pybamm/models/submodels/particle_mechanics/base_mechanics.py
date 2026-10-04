@@ -330,7 +330,13 @@ class BaseMechanics(pybamm.BaseSubModel):
         # compatible. Both items are scoped to phases with "porosity" in
         # their LAM option (same as item 25) and compose independently --
         # either, both, or neither may be active.
-        if self.options["volume change aging deformation"] == "true" and lam_scoped:
+        # Read per phase: this REPLACES the phase's own t_change() with the
+        # Si-style power law, so it must be switched on only for the phase(s)
+        # it was fitted for (e.g. (("false", "true"), "false") for Si only) --
+        # enabling it for graphite just because graphite also has porosity-
+        # isolation LAM would swap graphite's ~10% volume change for 1+3*sto.
+        phase_options = getattr(getattr(self.options, domain), self.phase)
+        if phase_options["volume change aging deformation"] == "true" and lam_scoped:
             exp_bol = phase_param.volume_change_deform_exponent_bol
             exp_end = phase_param.volume_change_deform_exponent_end
             lam_frac = pybamm.minimum(

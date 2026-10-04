@@ -94,11 +94,10 @@ class BaseOpenCircuitPotential(BaseInterface):
         if self.reaction != "lithium-ion main":
             return ocp_surf, ocp_bulk
         domain, Domain = self.domain_Domain
-        lam_option = getattr(getattr(self.options, domain), self.phase)[
-            "loss of active material"
-        ]
+        phase_options = getattr(getattr(self.options, domain), self.phase)
+        lam_option = phase_options["loss of active material"]
         if (
-            self.options["open-circuit potential aging deformation"] != "true"
+            phase_options["open-circuit potential aging deformation"] != "true"
             or "porosity" not in lam_option
         ):
             return ocp_surf, ocp_bulk
@@ -152,11 +151,19 @@ class BaseOpenCircuitPotential(BaseInterface):
         )
         ocp_surf = ocp_surf + lam_frac_surf * ((end_scale - 1) * ocp_surf + end_shift)
 
+        # The bulk OCP lives on "current collector" (sto_bulk is x-averaged),
+        # so the BOL reference must be x-averaged too: epsilon_s is an
+        # x-dependent FunctionParameter on the electrode domain, and dividing
+        # by it would silently promote ocp_bulk onto the electrode mesh. That
+        # was harmless for the secondary phase (its bulk OCP is diagnostic
+        # only) but breaks the primary phase, whose bulk OCP feeds
+        # ocv_bulk = ocp_p_bulk - ocp_n_bulk (e.g. "Local ECM resistance").
         eps_solid_bulk = variables[
             f"X-averaged {domain} electrode {phase_name}active material volume fraction"
         ]
         lam_frac_bulk = pybamm.minimum(
-            pybamm.maximum(1 - eps_solid_bulk / eps_solid_init, 0), 1
+            pybamm.maximum(1 - eps_solid_bulk / pybamm.x_average(eps_solid_init), 0),
+            1,
         )
         ocp_bulk = ocp_bulk + lam_frac_bulk * ((end_scale - 1) * ocp_bulk + end_shift)
 

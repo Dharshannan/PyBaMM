@@ -161,6 +161,19 @@ class LossActiveMaterial(BaseModel):
             remaining_frac_stress = pybamm.minimum(
                 pybamm.maximum(eps_solid_stress / eps_solid_stress_init, 0), 1
             )
+            # "power" damping: remaining_frac ** n. n < 1 still sends the term
+            # to 0 at depletion (the singularity guard above) but no longer
+            # cancels a real post-knee stress rise on the surviving particles.
+            if (
+                getattr(getattr(self.options, domain), self.phase)[
+                    "stress-driven LAM damping"
+                ]
+                == "power"
+            ):
+                remaining_frac_stress = (
+                    remaining_frac_stress
+                    ** self.phase_param.stress_lam_damping_exponent
+                )
             stress_h_surf = stress_h_surf * remaining_frac_stress
             # separate compressive and tensile stresses
             stress_h_surf_compressive = stress_h_surf * (stress_h_surf < 0)
@@ -494,9 +507,26 @@ class LossActiveMaterial(BaseModel):
         ]
         V = self.domain_param.L * self.param.A_cc
 
+        lli_rate = -V * pybamm.x_average(c_s_rav * deps_solid_dt)
+        # "isolation lithium trapping": the extra theta*(c_max - c_avg) of
+        # lithium per unit isolated volume that particle/fickian_diffusion.py
+        # removes from the remaining particles is also lithium lost to LAM.
+        phase_options = getattr(getattr(self.options, domain), self.phase)
+        lam_option = phase_options["loss of active material"]
+        if phase_options["isolation lithium trapping"] == "true" and "porosity" in lam_option:
+            prefix = "X-averaged " if self.x_average else ""
+            dom = domain if self.x_average else Domain
+            j_iso = variables[
+                f"{prefix}{dom} electrode {phase_name}LAM rate from porosity isolation [s-1]"
+            ]
+            theta = self.phase_param.isolation_li_trap_fraction
+            c_max = self.phase_param.c_max
+            lli_rate = lli_rate + V * pybamm.x_average(
+                theta * pybamm.maximum(c_max - c_s_rav, 0) * pybamm.maximum(-j_iso, 0)
+            )
         self.rhs = {
             # minus sign because eps_solid is decreasing and LLI measures positive
-            lli_due_to_lam: -V * pybamm.x_average(c_s_rav * deps_solid_dt),
+            lli_due_to_lam: lli_rate,
             eps_solid: deps_solid_dt,
         }
 

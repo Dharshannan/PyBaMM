@@ -1,0 +1,20 @@
+{
+  "ageing_current_A": 0.8329,
+  "charge_cv_voltage_V": 4.1497,
+  "charge_cv_end_current_A": 0.014,
+  "discharge_end_voltage_V_early_median": 3.1404,
+  "discharge_end_voltage_V_late_median": 3.1406,
+  "discharge_Ah_early_median": 1.9358,
+  "discharge_Ah_late_median": 1.491,
+  "n_ageing_discharges": 367,
+  "cell": "CELL009",
+  "soc_window_pct": [
+    15.0,
+    95.0
+  ],
+  "temperature_C": 25.0,
+  "pressure_kPa": 103.0,
+  "capacity_knee_efc": 298.1722359745961,
+  "expansion_transition_efc": 254.60363848203025,
+  "rpt1_efc": 8.653135434309146
+}

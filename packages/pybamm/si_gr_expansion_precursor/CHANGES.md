@@ -547,6 +547,212 @@ meaningless while appearing to run fine.
 
 ---
 
+## 10. Bulk-OCP aging deformation: x-average the BoL reference (bug fix, 2026-09-28)
+
+**What.** In `BaseOpenCircuitPotential._apply_ocp_aging_deformation`, the LAM
+fraction that ramps the OCP deformation is
+
+$$
+f_{\mathrm{LAM}} = \mathrm{clip}\!\left(1 - \frac{\varepsilon_s}{\varepsilon_{s,0}},\ 0,\ 1\right),
+\qquad
+U \leftarrow U + f_{\mathrm{LAM}}\,\big[(s_{\mathrm{end}}-1)\,U + \Delta U_{\mathrm{end}}\big].
+$$
+
+For the **bulk** OCP, $\varepsilon_s$ is the x-averaged active fraction
+(current-collector domain), but $\varepsilon_{s,0}$ was the x-dependent
+`epsilon_s` FunctionParameter. The ratio therefore silently promoted
+`ocp_bulk` onto the electrode mesh. This was harmless for the secondary
+phase, whose bulk OCP is only a diagnostic. It broke the primary phase,
+whose bulk OCP feeds `ocv_bulk = ocp_p_bulk - ocp_n_bulk`, giving a (5,1)
+vs (11,1) `ShapeError` through `"Local ECM resistance [Ohm]"`.
+
+**Fix.** The bulk branch now uses $\bar\varepsilon_{s,0} = \langle\varepsilon_{s,0}\rangle_x$.
+The surface branch is unchanged, since both of its factors live on the
+electrode domain. Values are identical when $\varepsilon_{s,0}$ is uniform in
+x.
+
+**Files.** `src/pybamm/models/submodels/interface/open_circuit_potential/base_ocp.py`.
+No new parameters.
+
+---
+
+## 11. Aging-deformation options scoped per phase (bug fix / option change, 2026-09-28)
+
+**What.** `"open-circuit potential aging deformation"` and
+`"volume change aging deformation"` are now read **per phase**, and accept a
+per-phase 2-tuple, e.g. `(("false", "true"), "false")` for Si only.
+Previously they were global and scoped only by `"porosity" in` the phase's
+LAM option. So enabling porosity-isolation LAM on graphite switched both
+deformations on for graphite too.
+
+**Why it mattered.** The volume-change deformation **replaces** the phase's
+own `t_change()` with Si's fitted power law,
+
+$$
+t_{\mathrm{change}}(\mathrm{sto}) = 1 + 3\,\mathrm{sto}^{\,n_{\mathrm{eff}}},
+\qquad n_{\mathrm{eff}} = n_{\mathrm{BoL}} + f_{\mathrm{LAM}}\,(n_{\mathrm{end}} - n_{\mathrm{BoL}}),
+$$
+
+which is never a no-op for graphite, even with $n_{\mathrm{BoL}} = n_{\mathrm{end}}$.
+It is ~30× graphite's real ~10% volume change, and corrupted the expansion
+and k outputs. Degradation outputs were unaffected, because `t_change` only
+feeds `"Cell thickness change [m]"`.
+
+**Files.**
+- `src/pybamm/models/submodels/particle_mechanics/base_mechanics.py`
+- `src/pybamm/models/submodels/interface/open_circuit_potential/base_ocp.py`
+- `src/pybamm/models/full_battery_models/base_battery_model.py` (both options added to the 2-tuple whitelist)
+
+No new parameters. Plain `"true"`/`"false"` strings behave as before.
+
+---
+
+## 12. `"stress-driven LAM damping"` option (new, 2026-09-29)
+
+**What.** Stress-driven LAM (Ai 2020 form) uses a self-limiting damper on
+the hydrostatic stress, added earlier to guard a stress singularity as
+$\varepsilon_s \to 0$:
+
+$$
+\frac{\partial \varepsilon_s}{\partial t}\Big|_{\mathrm{stress}}
+= -\beta_{\mathrm{LAM}}\left(\frac{\sigma_h^{+}\,\phi(r)}{\sigma_{\mathrm{crit}}}\right)^{m_{\mathrm{LAM}}},
+\qquad r = \mathrm{clip}\!\left(\frac{\varepsilon_s}{\varepsilon_{s,0}}, 0, 1\right).
+$$
+
+- `"linear"` (default, unchanged): $\phi(r) = r$.
+- `"power"`: $\phi(r) = r^{\,n}$, with $n$ = `"{Phase}: {Domain} electrode stress-driven LAM damping exponent"`.
+
+**Why.** With $\phi = r$, the real post-knee rise in stress on the surviving
+Si (load concentrating on fewer particles; 100–180 MPa in the crack-growth
+configs) is cancelled by the damper. An exponent $n < 1$ keeps the
+singularity guard ($\phi \to 0$ as $r \to 0$) but lets stress-driven LAM
+accelerate after the knee.
+
+**Files.**
+- `src/pybamm/models/submodels/active_material/loss_active_material.py`
+- `src/pybamm/parameters/lithium_ion_parameters.py` (new parameter `stress_lam_damping_exponent`)
+- `src/pybamm/models/full_battery_models/base_battery_model.py` (option, per-phase)
+
+**New parameter**, needed only when the option is `"power"`.
+
+---
+
+## 13. `"isolation lithium trapping"` sub-model (2026-09-29; reverted, then re-added and adopted 2026-09-30)
+
+**Status: re-added 2026-09-30 and ADOPTED (θ = 1 for Si) in the study_si_deg
+baseline crack_baseline_v3.** The implementation is as described below. The
+earlier "small effect" result was obtained before the item-14 fix. On the
+fixed core, θ = 1 adds +4–5pp of LLI after the knee, leaves the knee and Si
+LAM unchanged, and lowers Gr LAM (compensated with a higher Gr redirect
+yield). It recovers ~16–19 mV of the 25 °C late-RPT voltage gap. See
+`study_si_deg/FINDINGS.md`.
+
+**Idea.** Isolated material would carry
+$c_{\mathrm{trap}} = (1-\theta)\,\bar c_s + \theta\, c_{s,\max}$ of lithium
+out of the cyclable inventory instead of just $\bar c_s$ (Sulzer et al. 2021,
+eq. 37). Rationale: pore-closure isolation is biased towards the lithiated
+state. It was implemented as an opt-in per-phase option, with the excess
+removed as a uniform-in-r sink in the remaining particles.
+
+**Result.** θ = 0.3 and 0.6 raised true inventory LLI after the knee by only
+~1–2pp at both 25 °C and 45 °C, against gaps of ~8–14pp.
+
+**Why the effect is small.** Isolation LAM is driven by the SEI current,
+which is largest when the Si is lithiated (low anode potential). So the
+existing eq.-37 bookkeeping already removes lithium near $c_{\max}$, and
+the excess $c_{\max} - \bar c_s$ is small.
+
+(That explanation was for the pre-item-14 runs; on the fixed core the effect
+is larger, as the status line records.)
+
+**Equations** (as implemented). Let $\dot\varepsilon_{\mathrm{iso}} \le 0$ be
+the porosity-isolation LAM rate. The remaining particles get a sink that is
+uniform in r:
+
+$$
+\frac{\partial c_s}{\partial t} \mathrel{-}= \frac{\theta\,\max(c_{s,\max}-\bar c_s,0)\,\max(-\dot\varepsilon_{\mathrm{iso}},0)}{\varepsilon_s}\,
+\frac{c_s}{c_s + 0.01\,c_{s,\max}},
+$$
+
+and the LAM-trapped LLI gets $+V\langle\theta\,(c_{s,\max}-\bar c_s)\,(-\dot\varepsilon_{\mathrm{iso}})\rangle_x$.
+The last factor stops the sink driving $c_s$ negative near full
+delithiation.
+
+**Files:**
+- `models/submodels/particle/fickian_diffusion.py` (`_isolation_li_trap_sink`)
+- `models/submodels/active_material/loss_active_material.py` (LLI term)
+- `parameters/lithium_ion_parameters.py` (`isolation_li_trap_fraction`)
+- `models/full_battery_models/base_battery_model.py` (per-phase option
+  `"isolation lithium trapping"`, default `"false"`)
+
+**Validation:** particle-inventory LLI should equal side-reaction LLI plus
+`lli_due_to_lam`.
+
+Also tried and reverted the same day: an `"SEI redirect suppression"`
+option ($1 - sG$ in place of $1 - G$ on SEI growth). It was inert, because
+the porosity-isolation gate state $G$ stays small in absolute terms.
+
+---
+
+## 14. SEI-on-cracks current missing the crack area in multi-phase electrodes (bug fix, 2026-09-30)
+
+**Bug.** `BaseInterface._get_standard_volumetric_current_density_variables`
+scaled the SEI-on-cracks volumetric current by the crack-area factor only
+when `reaction_name == "SEI on cracks "`. For multi-phase electrodes,
+`reaction_name` carries the phase prefix (`self.reaction_name =
+self.phase_name + self.reaction_name`, e.g. `"secondary SEI on cracks "`).
+The check therefore failed, and the phase's crack-SEI current entered the
+electrode charge balance (the total interfacial current) as
+
+$$
+a\,j_{\mathrm{SEI,cr}} \quad\text{instead of}\quad a\,(\rho-1)\,j_{\mathrm{SEI,cr}} .
+$$
+
+The crack-SEI film equation (`sei_growth.py`: `a *= roughness - 1`) and the
+`"Loss of lithium to … SEI on cracks [mol]"` counter did use
+$a(\rho-1)$. So crack-SEI thickness, pore closure and *counted* LLI were
+correct, but only $1/(\rho-1)$ of that lithium actually left the particles.
+
+**Symptoms.**
+- **Lithium bookkeeping doesn't close.** Δ(particle + electrolyte lithium)
+  plus counted sinks ≠ 0, as measured with
+  `study_si_deg/lithium_budget.py`:
+  - ~2–4pp of nominal capacity with static cracks ($\rho - 1 \approx 1.9$)
+  - ~17pp once cracks grow ($\rho - 1$ up to ~28)
+- **The consequences follow from that gap:** too little true inventory LLI,
+  an over-lithiated graphite at top of charge (x ≈ 0.98), and C/20 RPT
+  curves shifted down by an electrode-balance offset.
+- **Scope:** single-phase electrodes are unaffected, since their
+  `reaction_name` has no prefix.
+
+**Fix.** Match on `self.reaction == "SEI on cracks"`, which has no phase
+prefix.
+
+**Files.** `src/pybamm/models/submodels/interface/base_interface.py`. No
+new parameters.
+
+**Origin.** Composite (per-phase) SEI on cracks was added in this fork, in
+commit `d7c2827c2` ("Added composite SEI on cracks"). That commit made the
+**film side** phase-aware: per-phase roughness in `sei_growth.py`,
+`sei_thickness.py` and `reaction_driven_porosity.py`. It missed the
+**charge-balance side** in `base_interface.py`, which still carried
+upstream's single-phase `reaction_name == "SEI on cracks "` check. That check
+is upstream code from 2022, and it predates composite crack SEI, so this
+is not an upstream bug unless upstream adds composite crack SEI. Both negative
+phases were affected:
+- Si: ρ − 1 up to ~28 with grown cracks.
+- Gr: ρ − 1 ≈ 1.9, with near-static cracks.
+
+**If proposing composite crack SEI upstream,** include this fix, plus a
+regression test that lithium is conserved:
+Δ(particle + electrolyte Li) + counted SEI/crack-SEI/LAM losses ≈ 0.
+
+**Impact on earlier results.** Every composite result in this project with
+SEI on cracks, from `d7c2827c2` onwards, carries the error. That includes
+`25degC_baseline1` and `crack_baseline_v1`, and all of them need re-fitting.
+
+---
+
 ## Open items / not yet done
 
 - Pore-buffering pressure-coupling phase (plan §3/§4/Change 5) — deferred.

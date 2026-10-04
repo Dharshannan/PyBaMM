@@ -325,7 +325,12 @@ class BaseInterface(pybamm.BaseSubModel):
         a_j = a * j
         a_j_av = pybamm.x_average(a_j)
 
-        if reaction_name == "SEI on cracks ":
+        # Match on self.reaction, not reaction_name: for multi-phase electrodes
+        # reaction_name carries the phase prefix ("secondary SEI on cracks "),
+        # which made this check fail, so crack-SEI current entered the charge
+        # balance with the base area a instead of the crack area a*(roughness-1)
+        # (while sei_growth.py's film/LLI bookkeeping used the crack area).
+        if self.reaction == "SEI on cracks":
             roughness = variables[f"{Domain} {phase_name}electrode roughness ratio"] - 1
             roughness_av = (
                 variables[f"X-averaged {domain} {phase_name}electrode roughness ratio"]

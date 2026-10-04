@@ -261,7 +261,47 @@ class FickianDiffusion(BaseParticle):
                     f"X-averaged {domain} {phase_name}particle "
                     "concentration distribution [mol.m-3]"
                 ]
-        self.rhs = {c_s: variables[f"{Domain} {phase_name}particle rhs [mol.m-3.s-1]"]}
+        rhs = variables[f"{Domain} {phase_name}particle rhs [mol.m-3.s-1]"]
+        sink = self._isolation_li_trap_sink(variables, c_s)
+        if sink is not None:
+            rhs = rhs - sink
+        self.rhs = {c_s: rhs}
+
+    def _isolation_li_trap_sink(self, variables, c_s):
+        """Extra lithium removed from the remaining active particles when
+        material is lost to porosity isolation ("isolation lithium trapping"
+        option): theta * (c_max - c_avg) * |d eps_iso/dt| / eps_s, applied
+        uniformly in r. The existing LAM bookkeeping already removes c_avg
+        with the lost material (Sulzer 2021 eq. 37); this adds the part a
+        particle isolated at full lithiation would have carried on top.
+        Guarded by c/(c + 0.01 c_max) so it cannot drive c negative near
+        full delithiation. Returns None when the option is off."""
+        domain, Domain = self.domain_Domain
+        phase_name = self.phase_name
+        phase_options = getattr(getattr(self.options, domain), self.phase)
+        if (
+            phase_options["isolation lithium trapping"] != "true"
+            or "porosity" not in phase_options["loss of active material"]
+        ):
+            return None
+        if self.size_distribution:
+            raise NotImplementedError(
+                "isolation lithium trapping is not implemented for particle-size distributions"
+            )
+        prefix = "X-averaged " if self.x_average else ""
+        dom = domain if self.x_average else Domain
+        j_iso = variables[
+            f"{prefix}{dom} electrode {phase_name}LAM rate from porosity isolation [s-1]"
+        ]
+        eps_s = variables[
+            f"{prefix}{dom} electrode {phase_name}active material volume fraction"
+        ]
+        c_rav = pybamm.r_average(c_s)
+        c_max = self.phase_param.c_max
+        theta = self.phase_param.isolation_li_trap_fraction
+        rate = theta * pybamm.maximum(c_max - c_rav, 0) * pybamm.maximum(-j_iso, 0) / eps_s
+        rate_r = pybamm.PrimaryBroadcast(rate, [f"{domain} {phase_name}particle"])
+        return rate_r * c_s / (c_s + 0.01 * c_max)
 
     def set_boundary_conditions(self, variables):
         domain, Domain = self.domain_Domain
