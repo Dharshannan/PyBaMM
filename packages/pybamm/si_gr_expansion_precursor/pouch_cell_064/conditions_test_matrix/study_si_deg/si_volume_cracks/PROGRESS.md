@@ -233,3 +233,42 @@ E_V values are in the `SI_CRACK_EAC` convention (positive = slower when hot).
   3. **Accept CELL026's window-specific behaviour.** Its knee is sharper,
      which a pore-clogging threshold gives more readily than gradual
      cracking.
+
+## v6: earlier 25 °C knee (user request, 2026-10-05) → `stage3_v6.env` (CURRENT)
+
+**Goal:** the user wants the 25 °C knee earlier, accepting an undershoot at
+the last two RPTs, and the 20–80% knee later if possible.
+
+**Paris rate:**
+
+| Paris | 25 °C: 91% crossing (real ~101) / knee-fit EFC / mean gap | 45 °C, E_V 150k: mean gap (after knee) | CELL009: mean gap (at EFC 329) |
+|---|---|---|---|
+| 0.75e3 (v5) | 110 / 141 / 1.0pp | 1.1pp (+0.9 / +0.6) | 2.3pp (−2.8) |
+| **1.0e3 (v6)** | **97 / 122 / 3.9pp** (−6.0 / −3.0 at 171 / 197) | **1.0pp** (−0.2 / −0.6) | **2.6pp** (−4.4) |
+| 1.15e3 | 90 / 114 / 4.8pp (−7.8 / −3.7) | 1.2pp (−0.9 / −1.3) | 2.7pp (−5.2) |
+
+**CELL026 width** (Paris 1.0e3):
+
+| Width | Mean gap | Gap at EFC 293 / 324 (pp) |
+|---|---|---|
+| 1e-3 (v5, Paris 0.75e3) | 5.9pp | −9.2 / −11.2 |
+| 5e-4 | 6.0pp | −9.2 / −11.9 |
+| **3e-4** | **5.6pp** | −7.9 / −10.6 |
+
+Width is a weak lever for the 20–80% knee. The −2.5 to −5.9pp pre-knee
+offset (lithium loss and cathode LAM running ahead) and the route-B strain
+per EFC (§ v5) are what's left.
+
+**v6 = v5 with Paris back to v3's 1e3 and E_V +150k:**
+
+| Condition | Mean SoH gap | Voltage RMSE | Expansion RMSE |
+|---|---|---|---|
+| 25 °C | 3.9pp (knee on time, late RPTs undershoot) | 0.105 V | 0.142 |
+| 45 °C | 1.0pp | 0.066 V | 0.118 |
+| CELL009 | 2.6pp | 0.095 V | 0.177 |
+| CELL026 (width 3e-4) | 5.6pp | 0.109 V | 0.398 |
+
+Kept runs: V6_25degC_crack1.0e3, V6_45degC_crack1.0e3_EV150k,
+V6_CELL009_crack1.0e3 and V6_CELL026_crack1.0e3_w3e-4, plus the stage-1
+finals. The V5 runs and the other V6 variants were deleted; v5's plots are
+in commit df68b5301.
