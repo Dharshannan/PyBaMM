@@ -1566,6 +1566,18 @@ VAR_PTS = {
 }
 
 NOMINAL_CAP_AH = 2.5947  # cell064_parameters.get_parameter_values()'s value
+# Test-protocol basis (2026-10-08). The real tests define C-rates and EFC on
+# the 2.5 Ah NOMINAL capacity (ageing current 0.833 A = C/3, C/20 RPT =
+# 0.125 A; package EFC = throughput / (2 x 2.5 Ah)). Before this, pybamm's
+# "C/x" steps used the model's 2.5947 Ah (currents ~3.8% high), and
+# efc_from_throughput divided by 2 x 2.5947 Ah (model EFC ~3.8% low at equal
+# throughput). Set both to 2.5947 to reproduce pre-2026-10-08 runs.
+RATE_BASIS_AH = float(os.environ.get("C64_RATE_BASIS_AH", 2.5))  # "Nominal cell capacity [A.h]" (C-rate -> A)
+EFC_BASIS_AH = float(os.environ.get("C64_EFC_BASIS_AH", 2.5))  # efc_from_throughput denominator / 2
+# Plot labelling: CELL_LABEL heads every figure title (rpt_soc_plots.py sets it
+# per condition). C64_FIG_NAMES=condition saves "<C64_OUT_TAG>_<plot>.png"
+# (e.g. 25deg_full_soc_overall_summary.png) instead of "cell064_<plot>_result_<tag>.png".
+CELL_LABEL = os.environ.get("C64_CELL_LABEL", "CELL064")
 UPPER_CUTOFF_V = 4.195
 LOWER_CUTOFF_V = 2.5
 
@@ -1940,6 +1952,7 @@ POS_LAM_MULT = float(os.environ.get("C64_POS_LAM_MULT", 1.0))
 BASE_POS_LAM_BETA = 2.7778e-07
 
 PARAM_UPDATES = {
+    "Nominal cell capacity [A.h]": RATE_BASIS_AH,  # C-rate basis = the tests' 2.5 Ah (see RATE_BASIS_AH)
     "Initial concentration in electrolyte [mol.m-3]": 1000.0 * ELECTROLYTE_CONC_MULT,
     # High-temperature condition (this fork's whole purpose): isothermal.py
     # pins the x-averaged cell temperature directly to "Ambient temperature
@@ -2222,7 +2235,7 @@ def rpt_leg(cyc):
 
 
 def efc_from_throughput(thr_ah):
-    return np.asarray(thr_ah) / (2.0 * NOMINAL_CAP_AH)
+    return np.asarray(thr_ah) / (2.0 * EFC_BASIS_AH)
 
 
 def cycle_expansion_ptp_um(cyc):
@@ -3201,7 +3214,7 @@ def plot_si_ocp_aging(results, exp_cap):
 
     ax.set_xlabel("Silicon stoichiometry (delithiation branch)")
     ax.set_ylabel("OCP [V]")
-    ax.set_title("CELL064: Silicon OCP aging deformation, model vs. real\n"
+    ax.set_title(f"{CELL_LABEL}: Silicon OCP aging deformation, model vs. real\n"
                  "(solid=model, dashed=real; both relative to RPT1's own curve)")
     ax.legend(fontsize=7, ncol=2, loc="upper right")
     ax.grid(alpha=0.3)
@@ -3212,6 +3225,9 @@ def plot_si_ocp_aging(results, exp_cap):
 def _savefig(fig, base_name):
     out_tag = os.environ.get("C64_OUT_TAG", "")  # set to avoid clobbering a probe's plot, e.g. floor comparisons
     out_name = f"{base_name}{('_' + out_tag) if out_tag else ''}.png"
+    if os.environ.get("C64_FIG_NAMES") == "condition" and out_tag:
+        short = base_name.removeprefix("cell064_").removesuffix("_result")
+        out_name = f"{out_tag}_{short}.png"
     outpath = os.path.join(SCRIPT_DIR, out_name)
     fig.savefig(outpath, dpi=150)
     print(f"Saved: {outpath}")
@@ -3224,7 +3240,7 @@ def plot_degradation_diagnostics(results, exp_cap, exp_lam, exp_lli, sim_efc_age
     _plot_lam(ax[0, 1], results, exp_lam, sim_efc_full)
     _plot_lli(ax[1, 0], results, exp_lli, sim_efc_full)
     _plot_rpt_voltage(ax[1, 1], results, exp_cap)
-    fig.suptitle("CELL064: degradation diagnostics (SoH, LAM, LLI, RPT voltage)")
+    fig.suptitle(f"{CELL_LABEL}: degradation diagnostics (SoH, LAM, LLI, RPT voltage)")
     plt.tight_layout()
     _savefig(fig, "cell064_degradation_fit_result")
 
@@ -3234,7 +3250,7 @@ def plot_expansion_diagnostics(results, exp_exp, exp_k, sim_efc_age, sim_efc_rpt
     fig, ax = plt.subplots(1, 2, figsize=(13, 5))
     _plot_reversible_expansion(ax[0], results, exp_exp, sim_efc_age)
     _plot_k_ratio(ax[1], results, exp_k, sim_efc_rpt)
-    fig.suptitle("CELL064: expansion diagnostics (pore-buffering params not yet retuned -- stage 3 starting point)")
+    fig.suptitle(f"{CELL_LABEL}: expansion diagnostics")
     plt.tight_layout()
     _savefig(fig, "cell064_expansion_fit_result")
 
@@ -3249,7 +3265,7 @@ def plot_overall_summary(results, exp_cap, exp_lam, exp_lli, exp_exp, exp_k,
     _plot_reversible_expansion(ax[1, 0], results, exp_exp, sim_efc_age)
     _plot_k_ratio(ax[1, 1], results, exp_k, sim_efc_rpt)
     ax[1, 2].axis("off")
-    fig.suptitle("CELL064: overall summary (degradation + expansion)")
+    fig.suptitle(f"{CELL_LABEL}: overall summary (degradation + expansion)")
     plt.tight_layout()
     _savefig(fig, "cell064_overall_summary_result")
 
@@ -3339,7 +3355,7 @@ def plot_thermal_diagnostics(sol):
     ax[1].set_title("Internal resistance across life")
     ax[1].grid(alpha=0.3)
 
-    fig.suptitle(f"CELL064: thermal diagnostics (item 26, thermal option = {THERMAL_OPTION!r})")
+    fig.suptitle(f"{CELL_LABEL}: thermal diagnostics (item 26, thermal option = {THERMAL_OPTION!r})")
     plt.tight_layout()
     _savefig(fig, "cell064_thermal_diagnostics_result")
     print(f"[THERMAL] T range: {Ts.min() - 273.15:.2f} to {Ts.max() - 273.15:.2f} degC "
@@ -3427,7 +3443,7 @@ def plot_stoichiometry_evolution(sol):
     axes[0].set_ylabel("x (stoichiometry) [-]")
     axes[2].set_ylabel("V [V]")
     axes[0].legend(fontsize=7, ncol=2)
-    fig.suptitle("Gr/Si stoichiometry-window evolution across life (all RPTs)")
+    fig.suptitle(f"{CELL_LABEL}: Gr/Si stoichiometry-window evolution across life (all RPTs)")
     plt.tight_layout()
     _savefig(fig, "stoichiometry_evolution")
 

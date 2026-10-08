@@ -119,4 +119,8 @@ Built by `build_partial_soc_data.py` from the same package, into
 - **EFC basis.** Every package EFC, including CELL064's and CELL017's, is
   throughput / (2 x 2.5 Ah). The model's `efc_from_throughput` divides by
   2 x 2.5947 Ah, so at equal EFC the model has ~3.8% more throughput. That
-  convention is used unchanged throughout the fits so far.
+  convention was used in all fits before 2026-10-08. Since then, the fork
+  has `EFC_BASIS_AH` = 2.5 (matching this package) and `RATE_BASIS_AH` = 2.5,
+  so the model's C/3 = 0.833 A and C/20 = 0.125 A, as in the tests (it was
+  0.865 / 0.130 A). Set `C64_EFC_BASIS_AH` = `C64_RATE_BASIS_AH` = 2.5947 to
+  reproduce older runs.

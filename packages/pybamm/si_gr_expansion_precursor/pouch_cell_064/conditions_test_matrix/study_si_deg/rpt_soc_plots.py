@@ -57,7 +57,9 @@ CONFIGS = {
 #     1.500 Ah C/3 discharge at the bottom, with the 2.5 V safety floor.
 PARTIAL_AGEING = {
     "25p1595": ("Discharge at C/3 until 3.14 V", "Charge at C/3 until 4.15 V", "Hold at 4.15 V until 14 mA"),
-    "25p2080": (f"Discharge at C/3 for {1.5 / (2.5947 / 3) * 3600:.1f} seconds or until 2.5 V",
+    # Fixed 1.500 Ah at C/3 of the RATE basis (the fork's C64_RATE_BASIS_AH,
+    # default 2.5 Ah as in the tests -> 0.833 A for 6480 s); never updated.
+    "25p2080": (f"Discharge at C/3 for {1.5 / (float(os.environ.get('C64_RATE_BASIS_AH', 2.5)) / 3) * 3600:.1f} seconds or until 2.5 V",
                 "Charge at C/3 until 3.969 V", "Hold at 3.969 V until 14 mA"),
 }
 cfg = CONFIGS[T_ARG]
@@ -105,6 +107,14 @@ m.SCRIPT_DIR = OUT
 CELL = (m.REAL_CELL_DIR_NAME.split("_")[0] if m.REAL_CELL_DIR_NAME
         else "CELL064" if T_ARG == "25" else "CELL017")
 T_LABEL = "45" if T_ARG == "45" else "25"
+WINDOW = {"25p1595": "15-95% SoC", "25p2080": "20-80% SoC"}.get(T_ARG, "full SoC")
+m.CELL_LABEL = f"{CELL} ({T_LABEL} degC, {WINDOW})"  # heads the fork's figure titles
+CONDITION_NAMES = os.environ.get("C64_FIG_NAMES") == "condition"
+
+
+def fig_path(kind):
+    """<OUT>/<kind>_<TAG>.png, or <OUT>/<TAG>_<kind>.png with C64_FIG_NAMES=condition."""
+    return os.path.join(OUT, f"{TAG}_{kind}.png" if CONDITION_NAMES else f"{kind}_{TAG}.png")
 
 
 def real(name):
@@ -215,9 +225,9 @@ def plot_crack_diagnostics(sol, results):
         ax[2, 1].set_ylabel("cumulative crack growth [nm]"); ax[2, 1].legend()
     for a in ax.flat:
         a.set_xlabel("EFC [-]"); a.grid(alpha=0.3)
-    fig.suptitle(f"Si crack / porosity diagnostics ({TAG})")
+    fig.suptitle(f"{m.CELL_LABEL}: Si crack / porosity diagnostics ({TAG})")
     fig.tight_layout()
-    out = os.path.join(OUT, f"crack_diagnostics_{TAG}.png")
+    out = fig_path("crack_diagnostics")
     fig.savefig(out, dpi=130)
     print("Saved:", out, flush=True)
 
@@ -270,8 +280,8 @@ def plot_rpts():
 
     ncol = 2 if len(pairs) <= 4 else 4
     nrow = int(np.ceil(len(pairs) / ncol))
-    title = (f"{CELL} ({T_LABEL} degC): SOC-normalised C/20 RPT {{}} -- "
-             f"{TAG} ({os.environ.get('RPT_BASELINE_ENV', 'crack_baseline_v3.env').removesuffix('.env')}, width {os.environ['C64_WIDTH']}, F0 {os.environ['C64_F0']})")
+    title = (f"{m.CELL_LABEL}: SOC-normalised C/20 RPT {{}} -- "
+             f"{TAG} ({os.environ.get('RPT_SET_LABEL') or os.environ.get('RPT_BASELINE_ENV', 'crack_baseline_v3.env').removesuffix('.env')}, width {os.environ['C64_WIDTH']}, F0 {os.environ['C64_F0']})")
     for kind in ("voltage", "dvdsoc"):
         fig, axes = plt.subplots(nrow, ncol, figsize=(5.5 * ncol, 4.5 * nrow), squeeze=False)
         for ax, (r, e_r, soc_r, v_r, e_m, soc_m, v_m) in zip(axes.flat, pairs):
@@ -296,7 +306,7 @@ def plot_rpts():
             ax.set_visible(False)
         fig.suptitle(title.format("discharge" if kind == "voltage" else "dV/d(SOC)"))
         fig.tight_layout()
-        out = os.path.join(OUT, f"rpt_{'voltage' if kind == 'voltage' else 'dvdsoc'}_dod_{TAG}.png")
+        out = fig_path(f"rpt_{'voltage' if kind == 'voltage' else 'dvdsoc'}_dod")
         fig.savefig(out, dpi=150)
         print("Saved:", out, flush=True)
 

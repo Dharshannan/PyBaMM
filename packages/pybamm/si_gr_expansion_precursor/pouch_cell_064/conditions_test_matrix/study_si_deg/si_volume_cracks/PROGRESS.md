@@ -272,3 +272,32 @@ Kept runs: V6_25degC_crack1.0e3, V6_45degC_crack1.0e3_EV150k,
 V6_CELL009_crack1.0e3 and V6_CELL026_crack1.0e3_w3e-4, plus the stage-1
 finals. The V5 runs and the other V6 variants were deleted; v5's plots are
 in commit df68b5301.
+
+## Protocol-basis fix and final plots (2026-10-08)
+
+- **Currents.** The real tests use C-rates of the 2.5 Ah nominal capacity:
+  ageing 0.833 A, C/20 RPT 0.125 A. The model used its own 2.5947 Ah, so
+  its currents were ~3.8% high. Fork `RATE_BASIS_AH` = 2.5 now sets
+  "Nominal cell capacity [A.h]".
+- **CELL026 discharge.** The fixed 1.5 Ah is now 6480 s at 0.833 A (was
+  6243 s at 0.865 A). Still exactly 1.5 Ah and never updated, as in the
+  test.
+- **EFC basis.** Fork `EFC_BASIS_AH` = 2.5 now matches the data's
+  throughput / (2 × 2.5 Ah); the model's EFC was ~3.8% low at equal
+  throughput. The aligned RPTs therefore land at ~3.8% less model
+  throughput than before.
+- **Reruns.** v6 (`stage3_v6.env`) rerun for all 4 conditions into
+  `final_plots/`. Plot names are `<condition>_<plot>.png` (25deg_full_soc,
+  45deg_full_soc, 25deg_15-95_soc, 25deg_20-80_soc) via
+  `C64_FIG_NAMES=condition`. Figure titles carry the cell
+  (`CELL_LABEL`, set by rpt_soc_plots.py).
+
+**Final results** (v6, corrected currents and EFC basis; `final_plots/`, with
+data in `final_data/`):
+
+| Condition | Mean SoH gap (before fix) | Voltage RMSE | Expansion RMSE | Notes |
+|---|---|---|---|---|
+| 25deg_full_soc (CELL064) | 3.3pp (3.9) | 0.104 V | 0.124 | 91% crossing at EFC 98 (real ~101) |
+| 45deg_full_soc (CELL017) | 1.2pp (1.0) | 0.059 V | 0.112 | after knee +0.8 / +1.5pp |
+| 25deg_15-95_soc (CELL009) | 2.4pp (2.6) | 0.084 V | 0.133 | after knee +0.4 / +2.1 / +4.3pp |
+| 25deg_20-80_soc (CELL026) | 4.5pp (5.6) | 0.105 V | 0.334 | knee −4.9 / −5.8pp at EFC 293 / 324 (were −7.9 / −10.6) |
