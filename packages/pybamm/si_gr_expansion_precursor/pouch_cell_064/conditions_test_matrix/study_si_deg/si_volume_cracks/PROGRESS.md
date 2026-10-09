@@ -301,3 +301,17 @@ data in `final_data/`):
 | 45deg_full_soc (CELL017) | 1.2pp (1.0) | 0.059 V | 0.112 | after knee +0.8 / +1.5pp |
 | 25deg_15-95_soc (CELL009) | 2.4pp (2.6) | 0.084 V | 0.133 | after knee +0.4 / +2.1 / +4.3pp |
 | 25deg_20-80_soc (CELL026) | 4.5pp (5.6) | 0.105 V | 0.334 | knee −4.9 / −5.8pp at EFC 293 / 324 (were −7.9 / −10.6) |
+
+**`final_plots_v2/` and `final_data_v2/` (2026-10-09).** The same v6 set
+and the same titles and names, but with the PRE-fix basis
+(`C64_RATE_BASIS_AH` = `C64_EFC_BASIS_AH` = 2.5947, so C/3 = 0.865 A).
+They reproduce the earlier v6 scores exactly:
+
+| Condition | Mean SoH gap (v2, pre-fix) | Mean SoH gap (fixed) |
+|---|---|---|
+| 25 °C | 3.9pp | 3.3pp |
+| 45 °C | 1.0pp | 1.2pp |
+| 15–95% | 2.6pp | 2.4pp |
+| 20–80% | 5.6pp | 4.5pp |
+
+The corrected runs' logs are now in `final_data/`.
