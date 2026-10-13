@@ -103,6 +103,21 @@ $$
 To first order only $Y/\tau$ matters. The gate acts as a damage-accumulation
 memory, not a physical relaxation.
 
+- **Gate size:** $g \le t/\tau \lesssim 0.04$ over the whole test. During
+  the knee it is only ~$10^{-3}$ (§1.9).
+- **Consequence:** the SEI redirect $(1-g)$ removes a negligible share of
+  the film growth. The LAM comes from the large lumped gain $Y$ acting on
+  the small $g$.
+- **Wall-clock time:** the gate integrates time, not cycles. Rests, CV holds
+  and slow RPTs all accumulate isolation while the pores are closed.
+- **Why it ended up an integrator:** the lag was introduced as a tuning knob
+  to widen and delay the knee. Its default, $\tau = 1$ s, makes the gate
+  instantaneous. The fit pushed $\tau$ far past the test duration, so the
+  data chose cumulative memory over an instantaneous porosity threshold.
+  The physical reading (progressive isolation the longer a region stays
+  electrolyte-starved) is plausible but not derived. It is a lagged-state
+  control, empirical in nature.
+
 ### 1.6 Parameters
 
 | Symbol | Parameter (code name) | v6 Si / Gr | Physical meaning | Status |
@@ -138,6 +153,103 @@ memory, not a physical relaxation.
    of particles".
 4. **$E_Y$.** The yield activation energies are fit knobs with no
    independent measurement.
+
+### 1.8 Equivalent "isolation dose" form (proposed, not implemented)
+
+Since the gate integrates (§1.5), the same behaviour can be written honestly
+as a time-integrated damage law. Define an isolation "dose" $D$: the time
+spent with closed pores, weighted by $g^*$, in seconds.
+
+$$
+\frac{dD}{dt} = g^*(h) = (1-h)^{\eta},
+\qquad
+\left.\frac{d\varepsilon_s}{dt}\right|_{\mathrm{iso}}
+= k_{\mathrm{iso}}(T)\; D\; \frac{a\,j_{\mathrm{SEI}}}{F}\;
+\mathrm{clip}\!\left(\frac{\varepsilon_s}{\varepsilon_{s,0}},\, 0,\, 1\right),
+\qquad
+k_{\mathrm{iso}} \equiv \frac{Y}{\tau}
+$$
+
+v6: $k_{\mathrm{iso}} = 0.25 / 3.5\times10^{8}\ \mathrm{s} \approx 7\times10^{-10}$
+(m³ mol⁻¹ s⁻¹ implicitly).
+
+**What it changes:**
+- The pretence of a physical relaxation goes.
+- The $Y/\tau$ degeneracy goes: one constant, $k_{\mathrm{iso}}$, replaces two.
+- The law states openly that isolation is a time-integrated damage
+  accumulation.
+
+**The SEI redirect** becomes $(1 - k_{\mathrm{iso}} D / Y)$ on the film
+growth if it is kept. It can also be dropped: it removes at most ~0.3% of
+the bulk SEI current during the knee (§1.5, §1.9).
+
+**Numerical equivalence with the current form.** The two differ only by the
+lag's "leak", the factor $e^{-(t-t')/\tau}$ in
+
+$$
+g(t) = \frac{1}{\tau}\int_0^t e^{-(t-t')/\tau}\,g^*(t')\,dt'
+$$
+
+- **The leak only matters while $g^* > 0$.** $g^*$ is essentially zero
+  until the porosity nears its floor (§1.9), so the leak acts only over the
+  time since pore closure: $\Delta t \sim 10^{6}$ s.
+- **Size:** the relative difference in $g$ is
+  $\Delta t / (2\tau) \approx 0.1$–$0.3\%$. That is far below the ~4% bound
+  you get from the whole test duration.
+- **Effect on the knee:** LAM grows as $\propto \Delta t^{2}$ after closure,
+  so a 0.3% gain change shifts the knee by ~0.15% of the closure-to-knee
+  time, ≪ 1 EFC.
+- **Verdict:** results identical to plotting precision. Not implemented,
+  because it is a reformulation, not a physics change.
+
+### 1.9 Why a small gate still gives a fast LAM rise (order of magnitude, 20–80% final run)
+
+Divide the LAM rate by the starting Si volume fraction to get the gain on
+the gate:
+
+$$
+\frac{1}{\varepsilon_{s,0}}\left|\frac{d\varepsilon_s}{dt}\right|_{\mathrm{iso}}
+= K\, g\, \frac{\varepsilon_s}{\varepsilon_{s,0}},
+\qquad
+K = \frac{Y\,|a\,j_{\mathrm{SEI}}|}{F\,\varepsilon_{s,0}}
+\approx \frac{0.25 \times 6\times10^{-5}}{0.058} \approx 3\times10^{-4}\ \mathrm{s^{-1}}
+$$
+
+Here $|a\,j_{\mathrm{SEI}}|/F \approx 6\times10^{-5}$ mol m⁻³ s⁻¹: bulk Si
+SEI grows by +0.26% of capacity between EFC 232 and 294, over an electrode
+volume of $2.9\times10^{-6}$ m³.
+
+**1. Onset.** With $\eta = 20$, $g^*$ is ~0 until the porosity is close to
+its floor:
+
+| $h$ | $g^*$ |
+|---|---|
+| 0.5 | $10^{-6}$ |
+| 0.1 | 0.12 |
+| 0.05 | 0.36 |
+
+With $\varepsilon_0 = 0.17$ and $\varepsilon_{\min} = 0.035$, $g^*$ switches
+on below $\varepsilon \approx 0.048$. The run's porosity goes 0.068 → 0.038
+between EFC 232 and 294.
+
+**2. Acceleration.** After closure, $g \approx \Delta t/\tau$, so
+
+$$
+\mathrm{LAM} \approx \frac{K\,\Delta t^{2}}{2\tau}
+\approx \frac{3\times10^{-4}\,(10^{6})^{2}}{2 \times 3.5\times10^{8}} \approx 0.4
+$$
+
+That is ~40% Si LAM within ~45 EFC of closure, while $g$ itself reaches only
+~$10^{-3}$. The run shows Si LAM 0.8 → 7.6 → 27 → 48% over EFC 280–340.
+
+**3. Saturation.** The $\varepsilon_s/\varepsilon_{s,0}$ factor rounds the
+curve off, giving the S-shape.
+
+**So the knee comes from four pieces:**
+- $\eta$ sets the onset (a porosity threshold);
+- the integrating gate turns it into a $\Delta t^{2}$ acceleration;
+- $Y/\tau$ sets the steepness;
+- Si depletion rounds it off.
 
 ---
 
