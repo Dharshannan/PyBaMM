@@ -49,10 +49,10 @@ g^* = (1 - h)^{\eta},
 \frac{dg}{dt} = \frac{g^* - g}{\tau}
 $$
 
-### 1.3 SEI redirect
+### 1.3 SEI redirect (in practice: SEI-current-driven isolation LAM)
 
-The fraction $g$ of the SEI reaction stops forming film and becomes LAM
-instead, so total reaction current is conserved:
+As designed, the fraction $g$ of the SEI reaction stops forming film and
+becomes LAM instead, so total reaction current is conserved:
 
 $$
 \frac{dc_{\mathrm{SEI}}}{dt} = (1 - g)\,\frac{-a\,j_{\mathrm{SEI}}}{F\,z_{\mathrm{SEI}}}
@@ -71,6 +71,32 @@ $$
 Y(T) = Y_0 \exp\!\left[\frac{E_Y}{R}\left(\frac{1}{T_{\mathrm{ref}}} - \frac{1}{T}\right)\right],
 \qquad T_{\mathrm{ref}} = 298.15\ \mathrm{K}
 $$
+
+**The redirect does two separate things, and only one matters:**
+
+| Role | Equation | Matters? |
+|---|---|---|
+| (a) **LAM driver:** isolation LAM ∝ SEI reaction current $a\,j_{\mathrm{SEI}}$ | LAM equation above | **Essential.** It produces the knee. Without the redirect option the branch uses $\beta_{\mathrm{LAM,iso}}\,L_{\mathrm{SEI}}$ (SEI thickness) instead, which is why $\beta_{\mathrm{LAM,iso}}$ is inert in v6. |
+| (b) **Current conservation:** $(1-g)$ on SEI film growth | $dc_{\mathrm{SEI}}/dt$ above | **Practically none.** $g \lesssim 10^{-3}$ during the knee and $\le$ ~0.04 over the whole test (§1.5), so SEI growth changes by ≤ 0.1–4%. That is invisible in LLI and porosity. |
+
+**Consequences:**
+- **The redirect does not divert current in practice.** The model
+  effectively *adds* an isolation-LAM channel on top of essentially
+  unchanged SEI growth.
+- **The lithium budget still closes.** Each channel is booked separately:
+  SEI LLI, and LAM-trapped Li via $\bar c$ and $\theta$ (checked by
+  `lithium_budget.py`). There is no double-counting; the "redirect" label
+  just over-describes what happens.
+- **The fitted corner is a tiny gate with a huge yield.** For (b) to
+  matter, $g$ would have to be O(0.1–1). Then $Y_0$ would have to be
+  ~100–1000× smaller for the same LAM, and SEI growth would visibly slow
+  during the knee.
+- **The $(1-g)$ factor is optional.** It can be kept for bookkeeping
+  consistency or dropped (as in §1.8); results are unchanged to plotting
+  precision.
+- **Not yet checked numerically.** That would need a small option in
+  `sei_growth.py` to switch the factor off.
+- **Description:** "SEI-current-driven, porosity-gated isolation LAM".
 
 ### 1.4 Lithium trapped in isolated particles
 
@@ -149,8 +175,10 @@ trade-off.
 **Physical:**
 - The causal chain is physical: pore filling → loss of electrolyte access →
   isolation.
-- The redirect conserves current, so the lithium budget closes and no new
-  sink is invented.
+- The lithium budget closes: SEI LLI and LAM-trapped Li are each booked.
+  The redirect's current conservation is formally there but numerically
+  negligible (§1.3), so in practice isolation LAM is an additional channel
+  driven by the SEI current.
 - Lithium trapping in isolated particles is a documented effect.
 - The porosity it reads is the model's own: SEI volume plus buffered
   swelling.
@@ -167,6 +195,9 @@ trade-off.
    of particles".
 4. **$E_Y$.** The yield activation energies are fit knobs with no
    independent measurement.
+5. **The "redirect" is cosmetic.** With $g \lesssim 10^{-3}$–$0.04$, the
+   $(1-g)$ cut on SEI growth is negligible. The physically motivated "SEI
+   current becomes LAM" picture is not what the fitted parameters do (§1.3).
 
 ### 1.8 Equivalent "isolation dose" form (proposed, not implemented)
 
