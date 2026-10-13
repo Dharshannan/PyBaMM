@@ -254,7 +254,7 @@ $$
 - **Effect on the knee:** LAM grows as $\propto \Delta t^{2}$ after closure,
   so a 0.3% gain change shifts the knee by ~0.15% of the closure-to-knee
   time, ≪ 1 EFC.
-- **Verdict (expected):** results identical to plotting precision. It is a
+- **Verdict (confirmed 2026-10-13):** results identical to plotting precision (every RPT gap within 0.1pp, see `final_plots_v3/`). It is a
   reformulation, not a physics change. The numerical check is the
   `final_plots_v3/` (dose) vs `final_plots/` (lagged) comparison.
 

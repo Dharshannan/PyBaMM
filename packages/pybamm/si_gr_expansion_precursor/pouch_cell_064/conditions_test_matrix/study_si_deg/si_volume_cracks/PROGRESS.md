@@ -315,3 +315,27 @@ They reproduce the earlier v6 scores exactly:
 | 20–80% | 5.6pp | 4.5pp |
 
 The corrected runs' logs are now in `final_data/`.
+
+## Isolation-gate dose form (branch `test_isolation_reform`, 2026-10-13)
+
+**Setup:**
+- Option `"porosity isolation gate": "dose"` (CHANGES item 16): dD/dt = g*,
+  LAM = k_iso·D·a·j_SEI/F with k_iso = Y(T)/τ, and no (1 − g) cut on SEI
+  growth.
+- Fork knob: `C64_ISO_GATE_FORM=dose`.
+- Same v6 set and corrected 2.5 Ah basis as `final_plots/`.
+- Outputs in `final_plots_v3/` and `final_data_v3/`.
+
+**Results:**
+
+| Condition | Mean SoH gap, dose (v3) | Mean SoH gap, lagged (final) | Largest per-RPT difference |
+|---|---|---|---|
+| 25 °C full | 3.3pp | 3.3pp | 0.1pp |
+| 45 °C full | 1.2pp | 1.2pp | 0.1pp |
+| 15–95% | 2.4pp | 2.4pp | 0.1pp |
+| 20–80% | 4.5pp | 4.5pp | 0.1pp |
+
+- Voltage and expansion RMSE agree to ≤ 0.0004.
+- This confirms MODEL_EQUATIONS §1.3 and §1.8: the lagged gate is an
+  integrator, and the SEI redirect is numerically negligible. The dose form
+  is the same model with one constant fewer (k_iso,0 = Y0/τ).
