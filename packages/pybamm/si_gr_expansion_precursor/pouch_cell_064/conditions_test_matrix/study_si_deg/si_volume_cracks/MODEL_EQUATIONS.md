@@ -100,8 +100,22 @@ g(t) \approx \frac{1}{\tau}\int_0^t g^*\,dt'
 \approx \frac{Y}{\tau}\left(\int_0^t g^*\,dt'\right)\frac{|a\,j_{\mathrm{SEI}}|}{F}
 $$
 
-To first order only $Y/\tau$ matters. The gate acts as a damage-accumulation
-memory, not a physical relaxation.
+To first order only $Y(T)/\tau$ matters. The gate acts as a
+damage-accumulation memory, not a physical relaxation.
+
+**The degeneracy is between $Y_0$ and $\tau$ only.** Both are
+temperature-independent constants, so only their ratio $Y_0/\tau$ enters, at
+any temperature. The Arrhenius factor in $Y(T)$ lies outside the
+degeneracy. $E_Y$ is separately identifiable from how the ratio changes
+between 25 and 45 °C.
+
+**$E_Y$ caveat.** The isolation-LAM rate is $Y(T)\,|a\,j_{\mathrm{SEI}}(T)|$,
+and the SEI current has its own activation energy ($E_{\mathrm{SEI}}$ =
+35 kJ/mol). The 45 °C data therefore constrain the product's combined
+temperature sensitivity. $E_Y$ and $E_{\mathrm{SEI}}$ would trade off if
+isolation were their only constraint. $E_{\mathrm{SEI}}$ is pinned
+separately by the pre-knee LLI, which reduces but does not remove the
+trade-off.
 
 - **Gate size:** $g \le t/\tau \lesssim 0.04$ over the whole test. During
   the knee it is only ~$10^{-3}$ (§1.9).
@@ -125,7 +139,7 @@ memory, not a physical relaxation.
 | $\varepsilon_{\min}$ | `Negative electrode porosity floor` | 0.035 | porosity at which electrolyte transport is cut off | physical in concept; value set by the fit |
 | $\varepsilon_0$ | initial porosity | as built | starting porosity | physical (cell design) |
 | $\eta$ | `porosity-isolation LAM exponent` | 20 / 10 | how abruptly isolation sets in as headroom closes (stand-in for a percolation threshold) | empirical shape factor |
-| $\tau$ | `porosity-isolation gate time constant [s]` | 3.5e8 / 2e8 s | lag between pore closure and isolation | empirical; near-degenerate with $Y$ (§1.5) |
+| $\tau$ | `porosity-isolation gate time constant [s]` | 3.5e8 / 2e8 s | lag between pore closure and isolation | empirical; degenerate with $Y_0$, only $Y_0/	au$ matters (§1.5) |
 | $Y_0$ | `SEI-redirect-to-LAM yield` | 0.25 / 0.025 | Si volume fraction lost per mole of redirected SEI lithium | lumped, fitted; carries m³/mol implicitly |
 | $E_Y$ | fork `C64_SI_YIELD_EAC` / `C64_GR_YIELD_EAC` | 35 / 56.5 kJ/mol | temperature dependence of the yield | fitted |
 | $\theta$ | `isolation lithium trapping fraction` | 1.0 (Si) | how full the isolated particles are (1 = isolated at full lithiation) | physical meaning; the fit sits at the bound |
@@ -167,15 +181,20 @@ $$
 = k_{\mathrm{iso}}(T)\; D\; \frac{a\,j_{\mathrm{SEI}}}{F}\;
 \mathrm{clip}\!\left(\frac{\varepsilon_s}{\varepsilon_{s,0}},\, 0,\, 1\right),
 \qquad
-k_{\mathrm{iso}} \equiv \frac{Y}{\tau}
+k_{\mathrm{iso}}(T) = k_{\mathrm{iso},0}\,\exp\!\left[\frac{E_Y}{R}\left(\frac{1}{T_{\mathrm{ref}}} - \frac{1}{T}\right)\right],
+\quad
+k_{\mathrm{iso},0} \equiv \frac{Y_0}{\tau}
 $$
 
-v6: $k_{\mathrm{iso}} = 0.25 / 3.5\times10^{8}\ \mathrm{s} \approx 7\times10^{-10}$
-(m³ mol⁻¹ s⁻¹ implicitly).
+v6: $k_{\mathrm{iso},0} = 0.25 / 3.5\times10^{8}\ \mathrm{s} \approx 7\times10^{-10}$
+(m³ mol⁻¹ s⁻¹ implicitly), with $E_Y$ = 35 kJ/mol (Si) unchanged. Two
+identifiable constants ($k_{\mathrm{iso},0}$, $E_Y$) replace three
+($Y_0$, $\tau$, $E_Y$).
 
 **What it changes:**
 - The pretence of a physical relaxation goes.
-- The $Y/\tau$ degeneracy goes: one constant, $k_{\mathrm{iso}}$, replaces two.
+- The $Y_0/\tau$ degeneracy goes: one constant, $k_{\mathrm{iso},0}$,
+  replaces two. $E_Y$ is kept.
 - The law states openly that isolation is a time-integrated damage
   accumulation.
 
