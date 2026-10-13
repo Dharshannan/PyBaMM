@@ -199,7 +199,12 @@ trade-off.
    $(1-g)$ cut on SEI growth is negligible. The physically motivated "SEI
    current becomes LAM" picture is not what the fitted parameters do (§1.3).
 
-### 1.8 Equivalent "isolation dose" form (proposed, not implemented)
+### 1.8 Equivalent "isolation dose" form
+
+**Status:** implemented on branch `test_isolation_reform` as option
+`"porosity isolation gate": "dose"` (CHANGES item 16; fork
+`C64_ISO_GATE_FORM=dose`). It is not on `test_volume_strain_cracking`.
+Comparison runs are in `final_plots_v3/`.
 
 Since the gate integrates (§1.5), the same behaviour can be written honestly
 as a time-integrated damage law. Define an isolation "dose" $D$: the time
@@ -249,8 +254,9 @@ $$
 - **Effect on the knee:** LAM grows as $\propto \Delta t^{2}$ after closure,
   so a 0.3% gain change shifts the knee by ~0.15% of the closure-to-knee
   time, ≪ 1 EFC.
-- **Verdict:** results identical to plotting precision. Not implemented,
-  because it is a reformulation, not a physics change.
+- **Verdict (expected):** results identical to plotting precision. It is a
+  reformulation, not a physics change. The numerical check is the
+  `final_plots_v3/` (dose) vs `final_plots/` (lagged) comparison.
 
 ### 1.9 Why a small gate still gives a fast LAM rise (order of magnitude, 20–80% final run)
 

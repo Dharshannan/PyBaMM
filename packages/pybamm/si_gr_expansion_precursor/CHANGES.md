@@ -848,6 +848,52 @@ EFC (≈ ln 4 for a full Si swing).
 
 ---
 
+## 16. `"porosity isolation gate"` option: isolation-dose form (new, 2026-10-13, branch `test_isolation_reform`)
+
+**Why.**
+- In the lagged form the gate relaxes, $dg/dt = (g^* - g)/\tau$. The fitted
+  $\tau$ (3.5e8 s Si, 2e8 s Gr) far exceeds the experiment (~1e7 s), so the
+  gate is in practice an integrator: $g \approx \tfrac{1}{\tau}\int g^*\,dt$.
+- Only $Y_0/\tau$ is identifiable.
+- The SEI redirect's $(1-g)$ cut on film growth is negligible, since
+  $g \lesssim 10^{-3}$ during the knee.
+- The new form states this directly. See
+  `study_si_deg/si_volume_cracks/MODEL_EQUATIONS.md` §1.3, §1.5 and §1.8.
+
+**Options.** `"porosity isolation gate"`:
+- `"lagged"` (default): unchanged.
+- `"dose"`: the gate state holds an isolation dose $D$ [s], with
+  $dD/dt = g^* = (1-h)^{\eta}$, and
+
+  $$
+  \left.\frac{d\varepsilon_s}{dt}\right|_{\mathrm{iso}} = k_{\mathrm{iso}}\,D\,\frac{a\,j_{\mathrm{SEI}}}{F}\,\mathrm{clip}\!\left(\frac{\varepsilon_s}{\varepsilon_{s,0}},0,1\right).
+  $$
+
+  There is no SEI-current redirect: `sei_growth.py` skips the $(1-g)$
+  factor in dose mode, even if `"SEI reaction redirect to LAM"` is
+  `"true"`. The state is scaled by 1e6 for the solver.
+
+**Parameter.** `"{Phase}: {Domain} electrode porosity-isolation dose LAM factor [m3.mol-1.s-1]"`, $k_{\mathrm{iso}}$:
+- only used in dose mode;
+- the fork sets $k_{\mathrm{iso}} = Y_0\,e^{E_Y/R(1/T_{\mathrm{ref}}-1/T)}/\tau$
+  from the existing knobs (`C64_ISO_GATE_FORM=dose`), so the fitted set is
+  unchanged.
+
+**Files:**
+- `models/full_battery_models/base_battery_model.py` (option);
+- `parameters/lithium_ion_parameters.py` (`k_LAM_iso_dose`);
+- `models/submodels/active_material/loss_active_material.py` (dose branch,
+  rhs, scaling);
+- `models/submodels/interface/sei/sei_growth.py` (no redirect in dose mode).
+
+**Check.**
+- CELL009 window smoke test: it builds and solves; the swing is unchanged
+  (7.3 µm).
+- The full 4-condition comparison against the lagged form is in
+  `si_volume_cracks/final_plots_v3` vs `final_plots`.
+
+---
+
 ## Open items / not yet done
 
 - Pore-buffering pressure-coupling phase (plan §3/§4/Change 5) — deferred.

@@ -614,6 +614,13 @@ class ParticleLithiumIonParameters(BaseParameters):
         self.tau_LAM_iso = pybamm.Parameter(
             f"{pref}{Domain} electrode porosity-isolation gate time constant [s]"
         )
+        # "porosity isolation gate": "dose" only -- isolation LAM rate per unit
+        # isolation dose D [s] and per unit SEI reaction rate a*j_SEI/F
+        # [mol.m-3.s-1]. Equals Y/tau of the lagged form when tau >> the
+        # experiment (the lagged gate is then an integrator, g ~ D/tau).
+        self.k_LAM_iso_dose = pybamm.Parameter(
+            f"{pref}{Domain} electrode porosity-isolation dose LAM factor [m3.mol-1.s-1]"
+        )
         # Redirect-to-LAM yield [dimensionless]: only referenced when
         # "SEI reaction redirect to LAM" is "true" -- see
         # loss_active_material.py's redirect branch and sei_growth.py's

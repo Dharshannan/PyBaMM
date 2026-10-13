@@ -71,11 +71,15 @@ class LossActiveMaterial(BaseModel):
             "loss of active material"
         ]
         if "porosity" in lam_option:
+            # "dose" gate form: the same state holds the isolation dose D [s]
+            # (dD/dt = g*), O(1e5-1e7) s, so it is scaled for the solver.
+            scale = 1e6 if self.options["porosity isolation gate"] == "dose" else 1
             if self.x_average is True:
                 isolation_state_xav = pybamm.Variable(
                     f"X-averaged {domain} electrode {phase}"
                     "porosity-isolation gate state",
                     domain="current collector",
+                    scale=scale,
                 )
                 isolation_state = pybamm.PrimaryBroadcast(
                     isolation_state_xav, f"{domain} electrode"
@@ -85,6 +89,7 @@ class LossActiveMaterial(BaseModel):
                     f"{Domain} electrode {phase}porosity-isolation gate state",
                     domain=f"{domain} electrode",
                     auxiliary_domains={"secondary": "current collector"},
+                    scale=scale,
                 )
             variables.update(
                 {
@@ -394,7 +399,20 @@ class LossActiveMaterial(BaseModel):
             # long the (tau-paced) gate needs to catch up -- decoupling
             # isolation's available DURATION from a_j_sei's own finite
             # lifetime.
-            if self.options["SEI reaction redirect to LAM"] == "true":
+            if self.options["porosity isolation gate"] == "dose":
+                # "dose" form (CHANGES item 16): isolation_gate is the dose D
+                # [s] (dD/dt = g*, set_rhs); rate = k_iso * D * a*j_SEI/F.
+                # Equivalent to the lagged redirect branch below with
+                # k_iso = Y/tau when tau >> the experiment, minus its
+                # (negligible) (1 - g) cut on SEI film growth.
+                j_iso = (
+                    self.phase_param.k_LAM_iso_dose
+                    * isolation_gate
+                    * a_j_sei
+                    / self.param.F
+                    * remaining_frac
+                )
+            elif self.options["SEI reaction redirect to LAM"] == "true":
                 # Redirect-to-LAM (item 23): the current-conserving
                 # alternative to v7c's L_sei-based term above. Reuses
                 # a_j_sei directly, matching sei_growth.py's matching gate
@@ -551,11 +569,15 @@ class LossActiveMaterial(BaseModel):
                 isolation_gate_target = variables[
                     f"{Domain} electrode {phase_name}porosity-isolation gate target"
                 ]
-            # First-order relaxation toward the algebraic target -- see
-            # get_fundamental_variables' doc-comment for why.
-            self.rhs[isolation_state] = (
-                isolation_gate_target - isolation_state
-            ) / tau_LAM_iso
+            if self.options["porosity isolation gate"] == "dose":
+                # Isolation dose: plain time integral of the target.
+                self.rhs[isolation_state] = isolation_gate_target
+            else:
+                # First-order relaxation toward the algebraic target -- see
+                # get_fundamental_variables' doc-comment for why.
+                self.rhs[isolation_state] = (
+                    isolation_gate_target - isolation_state
+                ) / tau_LAM_iso
 
     def set_initial_conditions(self, variables):
         domain, Domain = self.domain_Domain

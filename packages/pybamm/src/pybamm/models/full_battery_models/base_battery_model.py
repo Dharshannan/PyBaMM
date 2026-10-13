@@ -164,6 +164,19 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 provided for different behaviour in negative and positive electrodes.
             * "interface utilisation": str
                 Can be "full" (default), "constant", or "current-driven".
+            * "porosity isolation gate" : str
+                Form of the porosity-isolation LAM gate (only used when
+                "loss of active material" includes "porosity isolation").
+                "lagged" (default): the gate state g relaxes toward
+                g* = (1 - h)**eta with time constant tau, and the isolation
+                LAM rate is Y * g * a*j_SEI/F (redirect) or
+                beta_LAM_iso * L_SEI * g. "dose": the state is an isolation
+                dose D [s] with dD/dt = g*, and the isolation LAM rate is
+                k_iso * D * a*j_SEI/F, with "...porosity-isolation dose LAM
+                factor [m3.mol-1.s-1]" k_iso (= Y/tau of the lagged form when
+                tau >> the experiment). No SEI-current redirect: SEI film
+                growth is not reduced by the gate (that (1 - g) cut is
+                negligible in the lagged form anyway).
             * "SEI reaction redirect to LAM" : str
                 Can be "false" (default) or "true". When "true" and "loss of
                 active material" includes "porosity isolation" for a phase,
@@ -510,6 +523,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             ],
             "interface utilisation": ["full", "constant", "current-driven"],
             "SEI reaction redirect to LAM": ["false", "true"],
+            "porosity isolation gate": ["lagged", "dose"],
             "open-circuit potential aging deformation": ["false", "true"],
             "OCP aging deformation driver": ["LAM fraction", "throughput"],
             "volume change aging deformation": ["false", "true"],
@@ -624,6 +638,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "intercalation kinetics": "symmetric Butler-Volmer",
             "interface utilisation": "full",
             "SEI reaction redirect to LAM": "false",
+            "porosity isolation gate": "lagged",
             "open-circuit potential aging deformation": "false",
             "OCP aging deformation driver": "LAM fraction",
             "volume change aging deformation": "false",

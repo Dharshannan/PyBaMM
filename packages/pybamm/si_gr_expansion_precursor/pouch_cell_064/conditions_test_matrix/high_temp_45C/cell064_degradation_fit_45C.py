@@ -1409,6 +1409,13 @@ GR_LAM_ISO_EXPONENT = float(os.environ.get("C64_GR_LAM_ISO_EXPONENT", 3.0))
 GR_TAU_LAM_ISO = float(os.environ.get("C64_GR_TAU_LAM_ISO", 2e8))
 GR_REDIRECT_LAM_YIELD = float(os.environ.get("C64_GR_REDIRECT_LAM_YIELD", 0.0))
 SEI_REDIRECT_TO_LAM_OPTION = "true" if (SI_REDIRECT_TO_LAM or GR_REDIRECT_TO_LAM) else "false"
+# Isolation-gate form (CHANGES item 16, branch test_isolation_reform):
+#   C64_ISO_GATE_FORM=lagged (default) -- g relaxes to g* with tau; LAM = Y g a j_SEI/F;
+#                                          SEI film growth cut by (1 - g).
+#   C64_ISO_GATE_FORM=dose             -- dose D [s], dD/dt = g*; LAM = k_iso D a j_SEI/F with
+#                                          k_iso = Y(T)/tau from the same knobs (Y0, E_Y, tau),
+#                                          so the fit is unchanged; no (1 - g) SEI cut.
+ISO_GATE_FORM = os.environ.get("C64_ISO_GATE_FORM", "lagged")
 
 # Item 25: Si-OCP aging deformation (U_new = scale*U_base + shift), ramped by
 # the SAME isolation_gate already driving Si's LAM/redirect terms -- see
@@ -1550,6 +1557,7 @@ MODEL_OPTIONS_BASE = {
     "pore buffering transition": "physical",
     "SEI film resistance": SEI_FILM_RESISTANCE_OPTION,
     "SEI reaction redirect to LAM": SEI_REDIRECT_TO_LAM_OPTION,
+    "porosity isolation gate": ISO_GATE_FORM,
     "open-circuit potential aging deformation": OCP_AGING_DEFORM_OPTION,
     "OCP aging deformation driver": OCP_DEFORM_DRIVER,
     "volume change aging deformation": VOLUME_CHANGE_AGING_DEFORM_OPTION,
@@ -2001,6 +2009,8 @@ PARAM_UPDATES = {
     "Secondary: Negative electrode porosity-isolation LAM factor [s-1.m-1]": SI_BETA_LAM_ISO,  # v7c -- drives SEI THICKNESS now, not a_j_sei; only active when SI_LAM_OPTION includes "porosity isolation"
     "Secondary: Negative electrode porosity-isolation LAM exponent": SI_LAM_ISO_EXPONENT,  # v7 -- knee sharpness/width, default 4.0
     "Secondary: Negative electrode porosity-isolation gate time constant [s]": SI_TAU_LAM_ISO,  # isolation-gate-lag test -- default 1.0 (no lag)
+    "Secondary: Negative electrode porosity-isolation dose LAM factor [m3.mol-1.s-1]": SI_REDIRECT_LAM_YIELD * _yield_arrhenius(SI_YIELD_EAC) / SI_TAU_LAM_ISO,  # dose form only: k_iso = Y(T)/tau
+    "Primary: Negative electrode porosity-isolation dose LAM factor [m3.mol-1.s-1]": GR_REDIRECT_LAM_YIELD * _yield_arrhenius(GR_YIELD_EAC) / GR_TAU_LAM_ISO,
     "Secondary: Negative electrode SEI-redirect-to-LAM yield": SI_REDIRECT_LAM_YIELD * _yield_arrhenius(SI_YIELD_EAC),  # item 23 -- only active when C64_SI_REDIRECT_TO_LAM=1
     "Secondary: Negative electrode OCP aging-deformation end scale": SI_OCP_DEFORM_SCALE,  # item 25 -- only active when C64_SI_OCP_AGING_DEFORM=1
     "Secondary: Negative electrode OCP aging-deformation end shift [V]": SI_OCP_DEFORM_SHIFT,  # item 25
