@@ -339,3 +339,22 @@ The corrected runs' logs are now in `final_data/`.
 - This confirms MODEL_EQUATIONS §1.3 and §1.8: the lagged gate is an
   integrator, and the SEI redirect is numerically negligible. The dose form
   is the same model with one constant fewer (k_iso,0 = Y0/τ).
+
+**`final_plots_v4/` and `final_data_v4/`.** Dose-form gate (as v3) with the
+OLD 2.5947 Ah current/EFC basis (as v2). Identical to v2 within 0.1pp:
+
+| Condition | Mean SoH gap, v4 | Mean SoH gap, v2 |
+|---|---|---|
+| 25 °C | 3.9pp | 3.9pp |
+| 45 °C | 1.0pp | 1.0pp |
+| 15–95% | 2.6pp | 2.6pp |
+| 20–80% | 5.6pp | 5.6pp |
+
+**The four final sets:**
+
+| Folder | Gate | Current basis |
+|---|---|---|
+| `final_plots` | lagged | fixed |
+| `final_plots_v2` | lagged | old |
+| `final_plots_v3` | dose | fixed |
+| `final_plots_v4` | dose | old |
