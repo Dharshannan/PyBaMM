@@ -139,7 +139,7 @@ trade-off.
 | $\varepsilon_{\min}$ | `Negative electrode porosity floor` | 0.035 | porosity at which electrolyte transport is cut off | physical in concept; value set by the fit |
 | $\varepsilon_0$ | initial porosity | as built | starting porosity | physical (cell design) |
 | $\eta$ | `porosity-isolation LAM exponent` | 20 / 10 | how abruptly isolation sets in as headroom closes (stand-in for a percolation threshold) | empirical shape factor |
-| $\tau$ | `porosity-isolation gate time constant [s]` | 3.5e8 / 2e8 s | lag between pore closure and isolation | empirical; degenerate with $Y_0$, only $Y_0/	au$ matters (§1.5) |
+| $\tau$ | `porosity-isolation gate time constant [s]` | 3.5e8 / 2e8 s | lag between pore closure and isolation | empirical; degenerate with $Y_0$, only $Y_0/\tau$ matters (§1.5) |
 | $Y_0$ | `SEI-redirect-to-LAM yield` | 0.25 / 0.025 | Si volume fraction lost per mole of redirected SEI lithium | lumped, fitted; carries m³/mol implicitly |
 | $E_Y$ | fork `C64_SI_YIELD_EAC` / `C64_GR_YIELD_EAC` | 35 / 56.5 kJ/mol | temperature dependence of the yield | fitted |
 | $\theta$ | `isolation lithium trapping fraction` | 1.0 (Si) | how full the isolated particles are (1 = isolated at full lithiation) | physical meaning; the fit sits at the bound |
@@ -267,7 +267,7 @@ curve off, giving the S-shape.
 **So the knee comes from four pieces:**
 - $\eta$ sets the onset (a porosity threshold);
 - the integrating gate turns it into a $\Delta t^{2}$ acceleration;
-- $Y/\tau$ sets the steepness;
+- $Y_0/\tau$ (with $E_Y$ for temperature) sets the steepness;
 - Si depletion rounds it off.
 
 ---
@@ -379,13 +379,14 @@ $E_{cr}$ are fitted, though.
 
 | | Driving variable | Rate law / gate | Fitted constants |
 |---|---|---|---|
-| Isolation LAM | porosity (model physics) | $(1-h)^{\eta}$ gate, integrating lag, lumped yield | $\eta$, $Y/\tau$ (degenerate), $E_Y$, $\theta$ |
+| Isolation LAM | porosity (model physics) | $(1-h)^{\eta}$ gate, integrating lag, lumped yield | $\eta$, $Y_0/\tau$ (only the ratio is identifiable), $E_Y$, $\theta$ |
 | Strain cracking | Si log-strain (model physics) | linear damage accumulation, self-similar growth | $k_V$, $E_V$ |
 
 Both mechanisms are physically grounded closures, not first-principles laws.
 
 **Weakest points:**
-- the near-degenerate $(\eta, \tau, Y)$ triple in the isolation gate;
+- the isolation gate's $Y_0$–$\tau$ degeneracy, and $E_Y$ trading off
+  partly with $E_{\mathrm{SEI}}$;
 - route B's missing amplitude and inhomogeneity effects;
 - the large $E_V$.
 
