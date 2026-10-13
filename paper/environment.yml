@@ -1,0 +1,19 @@
+# conda env create -f environment.yml  &&  conda activate sigr-paper
+# Versions used for the paper runs. The modified PyBaMM is installed from the
+# tagged commit of this repository (it installs as "pybamm": use a fresh environment).
+name: sigr-paper
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - numpy=2.5.1
+  - scipy=1.17.1
+  - pandas=3.0.5
+  - matplotlib=3.11.1
+  - jupyterlab
+  - ipykernel
+  - pip:
+      - casadi==3.7.2
+      - pybammsolvers==0.9.0
+      - "pybamm @ git+https://github.com/Dharshannan/PyBaMM.git@si-gr-degradation-v1.0#subdirectory=packages/pybamm"
