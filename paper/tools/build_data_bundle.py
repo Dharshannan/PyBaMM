@@ -13,7 +13,7 @@ STUDY = os.path.join(REPO, "packages", "pybamm", "si_gr_expansion_precursor", "p
 EXP = os.path.join(STUDY, "degradation_test_matrix", "experimental_data")
 OCP = os.path.join(STUDY, "parameters", "data")
 POUCH_DATA = "C:/Shannan_PhD_Stuff_Local/Si_Gr_Expansion_Precursor/Pouch_Data"
-TABLES = ("capacity_fade", "LLI", "LAM_derived", "reversible_expansion", "k_expansion_scale")
+TABLES = ("capacity_fade", "LLI", "LAM_derived")  # no expansion data in the paper release
 
 
 def copy(src, dst_dir):
@@ -39,9 +39,8 @@ def main():
 
     for folder in ("CELL017_45C", "CELL009_25C_15-95", "CELL026_25C_20-80"):
         cell = folder.split("_")[0]
-        for f in [os.path.join(EXP, folder, f"{cell}_{t}.csv") for t in TABLES] + \
-                 glob.glob(os.path.join(EXP, folder, f"{cell}_cycling_protocol.json")):
-            copy(f, os.path.join(a.dest, folder))
+        for t in TABLES:
+            copy(os.path.join(EXP, folder, f"{cell}_{t}.csv"), os.path.join(a.dest, folder))
         for f in sorted(glob.glob(os.path.join(EXP, folder, "low_rate_c20", "*_discharge.csv"))):
             copy(f, os.path.join(a.dest, folder, "low_rate_c20"))
 

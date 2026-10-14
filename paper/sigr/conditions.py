@@ -22,7 +22,7 @@ class Condition:
     data_folder: str  # folder under the data directory
     temperature_K: float
     window: str  # label: "full SoC", "15-95% SoC", "20-80% SoC"
-    F0: float  # pore-buffering transmitted-fraction plateau = the cell's first-RPT k
+    F0: float  # pore-buffering transmitted-fraction plateau
     width: float  # pore-buffering transition width (the one fitted per-condition value)
     knee_efc_raw: float  # the cell's capacity-knee EFC (raw test EFC, before the RPT1 shift)
 
@@ -38,7 +38,6 @@ class Condition:
 CONDITIONS = {
     c.key: c
     for c in [
-        # CELL064 knee anchor = its reversible-expansion peak (EFC ~152 raw).
         Condition("25deg_full_soc", "CELL064", "CELL064_25C_full", 298.15, "full SoC", 0.7, 5e-3, 152.0),
         Condition("45deg_full_soc", "CELL017", "CELL017_45C", 318.15, "full SoC", 0.8, 3e-4, 318.853946),
         Condition("25deg_15-95_soc", "CELL009", "CELL009_25C_15-95", 298.15, "15-95% SoC", 0.7, 1e-3, 298.1722359745961),

@@ -70,7 +70,7 @@ V6 = dict(
     si_iso_exponent=20.0, si_iso_Y0=0.25, si_iso_E_Y=35000.0, si_iso_tau=3.5e8,
     gr_iso_exponent=10.0, gr_iso_Y0=0.025, gr_iso_E_Y=56500.0, gr_iso_tau=2e8,
     si_iso_li_trapping=1.0,
-    # Si aging deformation (fitted to the Si OCP and expansion data)
+    # Si aging deformation (fitted Si OCP deformation and volume-change law)
     si_ocp_deform_scale=0.8663, si_ocp_deform_shift=-0.00908,
     si_volume_exp_bol=1.561216606871758, si_volume_exp_end=2.18807468386046,
     # Graphite

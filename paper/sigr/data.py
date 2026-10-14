@@ -6,8 +6,6 @@ Layout under the data directory (the Zenodo data record)::
     <data_folder>/<CELL>_capacity_fade.csv         rpt, efc, discharge_capacity_Ah, source, capacity_retention_pct
     <data_folder>/<CELL>_LLI.csv                   rpt, efc, charge_LLI, joule_LLI, charge_LLI_loss, joule_LLI_loss
     <data_folder>/<CELL>_LAM_derived.csv           rpt, efc, ..., LAM_NE_graphite_pct, LAM_NE_silicon_pct, LAM_PE_pct
-    <data_folder>/<CELL>_reversible_expansion.csv  cyc_seq, efc, reversible_expansion_um
-    <data_folder>/<CELL>_k_expansion_scale.csv     rpt, efc, k, source
     <data_folder>/low_rate_c20/<CELL>_RPT<nnn>_lowrate_c20_discharge.csv   Q_discharge_Ah, voltage_terminal_V
     ocp/*.csv                                      beginning-of-life OCPs (parameters.py)
 
@@ -37,7 +35,7 @@ def load(cond, data_dir, name):
 
 def load_all(cond, data_dir):
     return {name: load(cond, data_dir, name)
-            for name in ("capacity_fade", "LLI", "LAM_derived", "reversible_expansion", "k_expansion_scale")}
+            for name in ("capacity_fade", "LLI", "LAM_derived")}
 
 
 def rpt_targets(cond, data_dir):

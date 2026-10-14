@@ -9,8 +9,8 @@ import numpy as np
 from . import analysis as an
 from . import data
 
-C_MODEL, C_RPT, C_GR, C_SI, C_PE, C_LLI, C_EXP = (
-    "tab:blue", "tab:orange", "saddlebrown", "darkorange", "seagreen", "crimson", "tab:purple")
+C_MODEL, C_RPT, C_GR, C_SI, C_PE, C_LLI = (
+    "tab:blue", "tab:orange", "saddlebrown", "darkorange", "seagreen", "crimson")
 
 
 def _finish(ax, xlabel="EFC since RPT1 [-]"):
@@ -71,43 +71,12 @@ def rpt_voltage(ax, res, curves, cond, data_dir):
     _finish(ax, "Discharge capacity [A.h] (C/20)")
 
 
-def expansion(ax, res, cond, data_dir, n_ref=5):
-    ok = ~np.isnan(res["age_expansion_um"])
-    e, x = an.efc(res, res["age_thr"])[ok], res["age_expansion_um"][ok]
-    real = data.load(cond, data_dir, "reversible_expansion")
-    rx = real["reversible_expansion_um"].to_numpy()
-    ax.plot(e, x / np.median(x[:n_ref]), lw=1, color=C_EXP, label="Model (C/3 ageing)")
-    ax.scatter(real["efc"], rx / np.median(rx[:n_ref]), s=8, alpha=0.4, color="black", label="Experimental")
-    ax.set_ylabel("Reversible expansion / early-life value [-]")
-    ax.set_title("Reversible expansion (normalised)")
-    ax.legend(fontsize=8)
-    _finish(ax)
-
-
-def k_ratio(ax, res, cond, data_dir):
-    ax.scatter(an.efc(res, res["rpt_thr"]), res["rpt_k"], marker="^", s=110, facecolors="none",
-               edgecolors=C_RPT, linewidths=1.8, label="Model RPT (C/20)", zorder=7)
-    k = data.load(cond, data_dir, "k_expansion_scale")
-    c20, sub = k[k["source"] == "C/20 RPT"], k[k["source"] != "C/20 RPT"]
-    ax.scatter(c20["efc"], c20["k"], s=70, color="black", label="Experimental (C/20 RPT)", zorder=6)
-    if len(sub):
-        ax.scatter(sub["efc"], sub["k"], s=70, facecolors="none", edgecolors="black", linewidths=1.4,
-                   label="Experimental (high-rate substitute)", zorder=6)
-    ax.set_ylabel("k = δ_rev,cell / δ_rev,particle [-]")
-    ax.set_title("Expansion scale k")
-    ax.legend(fontsize=8)
-    _finish(ax)
-
-
 def overall_summary(res, curves, cond, data_dir):
-    fig, ax = plt.subplots(2, 3, figsize=(18, 9))
-    soh(ax[0, 0], res, cond, data_dir)
-    lam_lli(ax[0, 1], res, cond, data_dir)
-    rpt_voltage(ax[0, 2], res, curves, cond, data_dir)
-    expansion(ax[1, 0], res, cond, data_dir)
-    k_ratio(ax[1, 1], res, cond, data_dir)
-    ax[1, 2].axis("off")
-    fig.suptitle(f"{cond.label}: overall summary (degradation + expansion)")
+    fig, ax = plt.subplots(1, 3, figsize=(18, 5.2))
+    soh(ax[0], res, cond, data_dir)
+    lam_lli(ax[1], res, cond, data_dir)
+    rpt_voltage(ax[2], res, curves, cond, data_dir)
+    fig.suptitle(f"{cond.label}: overall summary")
     fig.tight_layout()
     return fig
 
@@ -165,8 +134,15 @@ def crack_diagnostics(res, cond):
     ax[0, 1].set_ylabel("Si roughness ratio [-]")
     ax[1, 0].plot(an.efc(res, res["cycle_thr"]), res["cycle_peak_stress_MPa"], ".", ms=3)
     ax[1, 0].set_ylabel("peak |Si surface tangential stress| per cycle [MPa]")
-    ax[1, 1].plot(e, res["porosity"])
-    ax[1, 1].set_ylabel("X-averaged negative electrode porosity [-]")
+    # Per-cycle minimum (charged end of each ageing cycle). The first ageing
+    # cycle after an RPT starts from the RPT's full charge rather than the
+    # window top, so for partial windows its minimum is lower: left out.
+    after_rpt = np.searchsorted(res["age_thr"], res["rpt_thr"], side="right")
+    keep = np.ones(res["age_thr"].size, bool)
+    keep[after_rpt[after_rpt < keep.size]] = not cond.partial
+    ax[1, 1].plot(np.r_[0.0, an.efc(res, res["age_thr"])[keep]],
+                  np.r_[res["initial_porosity"], res["age_min_porosity"][keep]], ".", ms=3)
+    ax[1, 1].set_ylabel("negative electrode porosity, per-cycle minimum [-]")
     ax[2, 0].plot(e, res["Q_si_sei"] * to_pct, label="Si SEI (bulk)")
     ax[2, 0].plot(e, res["Q_si_sei_cracks"] * to_pct, label="Si SEI on cracks")
     ax[2, 0].set_ylabel("LLI [% of nominal]")

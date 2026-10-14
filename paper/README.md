@@ -12,7 +12,7 @@ parameter set covers four test conditions:
 | `25deg_15-95_soc` | CELL009 | 25 °C | 15–95% | F0 0.7, width 1e-3 |
 | `25deg_20-80_soc` | CELL026 | 25 °C | 20–80% | F0 0.7, width 3e-4 |
 
-- **F0** is the cell's measured first-RPT expansion scale k.
+- **F0** is the pore-buffering transmitted-fraction plateau.
 - **width** is the pore-buffering transition width, the one fitted
   per-condition value.
 
@@ -25,7 +25,7 @@ parameter set covers four test conditions:
 | `sigr/parameters.py` | model options and the shared parameter set (`V6`) |
 | `sigr/simulate.py` | formation, aligned C/20 RPTs, C/3 ageing, solver retries, result reduction |
 | `sigr/data.py` | experimental-data loading (EFC since each cell's RPT1) |
-| `sigr/analysis.py` | scores: SoH gap, voltage RMSE, expansion, k, knee, LLI/LAM, crack state |
+| `sigr/analysis.py` | scores: SoH gap, voltage RMSE, knee, LLI/LAM, crack state |
 | `sigr/plots.py` | figures |
 | `tools/run_condition.py` | command-line run of one condition |
 | `tools/build_data_bundle.py` | assembles `data/` from the study's files (author use) |
@@ -53,8 +53,8 @@ This installs the modified PyBaMM from the tagged commit:
 
 Download the data record (Zenodo DOI: *to be added*) and unpack it here:
 
-- `data/`: per cell, the capacity fade, LLI, LAM, reversible expansion and
-  expansion scale k, plus the C/20 RPT discharge curves. Also the
+- `data/`: per cell, the capacity fade, LLI and LAM, plus the C/20 RPT
+  discharge curves. Also the
   beginning-of-life OCPs (`data/ocp/`). EFC = throughput / (2 × 2.5 Ah).
 - `outputs/` (optional): the precomputed model outputs
   (`<condition>_results.npz`, `<condition>_rpt_curves.csv`).

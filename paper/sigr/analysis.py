@@ -93,28 +93,6 @@ def rpt_gaps(res, cond, data_dir):
         gap_pp=lambda d: d.model_soh - d.real_soh)
 
 
-def expansion_rmse(res, cond, data_dir, n_ref=5):
-    """RMSE of the reversible expansion, each series normalised by its first
-    n_ref points' median (shape only; absolute scales differ)."""
-    ok = ~np.isnan(res["age_expansion_um"])
-    me, mx = efc(res, res["age_thr"])[ok], res["age_expansion_um"][ok]
-    real = data.load(cond, data_dir, "reversible_expansion")
-    re_, rx = real["efc"].to_numpy(), real["reversible_expansion_um"].to_numpy()
-    mn, rn = mx / np.median(mx[:n_ref]), rx / np.median(rx[:n_ref])
-    o = np.argsort(me)
-    inr = (re_ >= me[o][0]) & (re_ <= me[o][-1])
-    return float(np.sqrt(np.mean((np.interp(re_[inr], me[o], mn[o]) - rn[inr]) ** 2)))
-
-
-def k_gaps(res, cond, data_dir):
-    real = data.load(cond, data_dir, "k_expansion_scale")
-    e = efc(res, res["rpt_thr"])
-    o = np.argsort(e)
-    rows = [(r.efc, r.k, float(np.interp(r.efc, e[o], res["rpt_k"][o])))
-            for r in real.itertuples() if e[o][0] <= r.efc <= e[o][-1]]
-    return pd.DataFrame(rows, columns=["efc", "real_k", "model_k"]).assign(gap=lambda d: d.model_k - d.real_k)
-
-
 def knee(res, cond, data_dir, onset_soh=91.0):
     """Model knee = steepest descent of the C/3 ageing SoH; also the SoH-91% crossing."""
     soh, e = ageing_soh(res), efc(res, res["age_thr"])
@@ -160,14 +138,18 @@ def lli_lam_table(res, cond, data_dir):
 
 
 def crack_table(res):
-    """Si crack, porosity and SEI state at each model RPT."""
+    """Si crack, porosity (minimum of the preceding ageing cycle) and SEI
+    state at each model RPT."""
     e_all = efc(res, res["thr"])
+    e_age = efc(res, res["age_thr"])
     to_pct = 100 / MODEL_CAPACITY_AH
     rows = []
     for e in efc(res, res["rpt_thr"]):
         i = int(np.argmin(np.abs(e_all - e)))
+        before = e_age <= e
+        porosity = res["age_min_porosity"][before][-1] if before.any() else float(res["initial_porosity"])
         rows.append(dict(efc=e, l_over_l0=res["crack_length"][i] / res["crack_length"][0],
-                         roughness=res["roughness"][i], porosity=res["porosity"][i],
+                         roughness=res["roughness"][i], porosity=porosity,
                          lli_si_sei_pct=res["Q_si_sei"][i] * to_pct,
                          lli_si_sei_cracks_pct=res["Q_si_sei_cracks"][i] * to_pct,
                          strain_E=res["strain_E"][i], dl_paris_nm=1e9 * res["dl_paris"][i],
@@ -188,6 +170,4 @@ def summary(res, curves, cond, data_dir):
     return dict(condition=cond.key, cell=cond.cell,
                 mean_abs_soh_gap_pp=float(gaps["gap_pp"].abs().mean()),
                 mean_voltage_rmse_V=float(vr["rmse_V"].mean()) if len(vr) else np.nan,
-                expansion_rmse=expansion_rmse(res, cond, data_dir),
-                mean_abs_k_gap=float(k_gaps(res, cond, data_dir)["gap"].abs().mean()),
                 knee_efc=kn["knee_efc"], soh91_efc=kn["soh91_efc"], real_knee_efc=kn["real_knee_efc"])

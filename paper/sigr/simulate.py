@@ -34,10 +34,13 @@ CRACK_VARS = [
     "X-averaged negative secondary particle crack length [m]",
     "X-averaged negative secondary electrode roughness ratio",
     "X-averaged negative secondary particle surface tangential stress [Pa]",
-    "X-averaged negative electrode porosity",
     "Loss of lithium to negative secondary SEI [mol]",
     "Loss of lithium to negative secondary SEI on cracks [mol]",
 ]
+# Negative electrode porosity (x-averaged). It oscillates within each cycle
+# (Si swelling buffered into the pores); its per-cycle minimum (charged end)
+# decreases smoothly from the initial porosity to the porosity floor.
+POROSITY = "X-averaged negative electrode porosity"
 STRAIN_VARS = [
     "X-averaged negative secondary particle strain-fatigue driver [s-1]",
     "X-averaged negative secondary particle strain-fatigue cracking rate [m.s-1]",
@@ -48,8 +51,6 @@ OUTPUT_VARIABLES = [
     "Discharge capacity [A.h]",
     "Throughput capacity [A.h]",
     "Terminal voltage [V]",
-    "Cell thickness change [m]",
-    "Negative electrode transfer ratio k",
     "Volume-averaged cell temperature [K]",
     "Local ECM resistance [Ohm]",
     "X-averaged negative primary particle surface stoichiometry",
@@ -63,6 +64,7 @@ OUTPUT_VARIABLES = [
     "Loss of lithium due to loss of secondary active material in negative electrode [mol]",
     "Loss of lithium due to loss of active material in positive electrode [mol]",
     "Total lithium lost from particles [mol]",
+    POROSITY,
 ] + CRACK_VARS + STRAIN_VARS
 
 MIN_VALID_CAP_AH = 0.10 * MODEL_CAPACITY_AH
@@ -212,7 +214,7 @@ def reduce(sol, cond, efc_basis_ah=EFC_BASIS_AH, n_series=20000):
     time series (LAM, LLI, crack diagnostics; whole run including the final
     RPT) on n_series points evenly spaced in throughput. Everything the
     scores and figures need, nothing else."""
-    age_cap, age_thr, age_exp, rpt_cap, rpt_thr, rpt_k, curves = [], [], [], [], [], [], []
+    age_cap, age_thr, age_porosity, rpt_cap, rpt_thr, curves = [], [], [], [], [], []
     cyc_thr, cyc_sig = [], []
     for cyc in sol.cycles:
         thr_end = float(cyc["Throughput capacity [A.h]"].entries[-1])
@@ -225,15 +227,12 @@ def reduce(sol, cond, efc_basis_ah=EFC_BASIS_AH, n_series=20000):
         if cap > 0 and end_thr is not None:
             age_cap.append(cap)
             age_thr.append(thr_end)
-            d = cyc["Cell thickness change [m]"].entries
-            age_exp.append(float(d.max() - d.min()) * 1e6 if d.size >= 2 else np.nan)
+            age_porosity.append(float(np.min(cyc[POROSITY].entries)))
             continue
         rcap, rend = rpt_discharge(cyc)
         if rcap > 0 and rend is not None:
             rpt_cap.append(rcap)
             rpt_thr.append(thr_end)
-            k = cyc["Negative electrode transfer ratio k"].entries
-            rpt_k.append(float(np.max(np.abs(k))) if k.size else np.nan)
             q, v = rpt_discharge_curve(cyc)
             if q is not None:
                 curves.append((thr_end, q, v))
@@ -252,8 +251,9 @@ def reduce(sol, cond, efc_basis_ah=EFC_BASIS_AH, n_series=20000):
 
     to_ah = F / 3600.0
     res = dict(
-        age_cap=np.array(age_cap), age_thr=np.array(age_thr), age_expansion_um=np.array(age_exp),
-        rpt_cap=np.array(rpt_cap), rpt_thr=np.array(rpt_thr), rpt_k=np.array(rpt_k),
+        age_cap=np.array(age_cap), age_thr=np.array(age_thr), age_min_porosity=np.array(age_porosity),
+        initial_porosity=np.array(float(sol[POROSITY].entries[0])),
+        rpt_cap=np.array(rpt_cap), rpt_thr=np.array(rpt_thr),
         cycle_thr=np.array(cyc_thr), cycle_peak_stress_MPa=np.array(cyc_sig),
         thr=qt_full[idx],
         LAM_gr=series("Loss of active material in primary phase in negative electrode [%]"),
@@ -263,8 +263,8 @@ def reduce(sol, cond, efc_basis_ah=EFC_BASIS_AH, n_series=20000):
         Q_lli_lam_trap=sum(series(f"Loss of lithium due to loss of {p}active material in {d} electrode [mol]", to_ah)
                            for p, d in (("primary ", "negative"), ("secondary ", "negative"), ("", "positive"))),
         Q_lli_particles=series("Total lithium lost from particles [mol]", to_ah),
-        crack_length=series(CRACK_VARS[0]), roughness=series(CRACK_VARS[1]), porosity=series(CRACK_VARS[3]),
-        Q_si_sei=series(CRACK_VARS[4], to_ah), Q_si_sei_cracks=series(CRACK_VARS[5], to_ah),
+        crack_length=series(CRACK_VARS[0]), roughness=series(CRACK_VARS[1]),
+        Q_si_sei=series(CRACK_VARS[3], to_ah), Q_si_sei_cracks=series(CRACK_VARS[4], to_ah),
         strain_E=cumulative(STRAIN_VARS[0]), dl_strain=cumulative(STRAIN_VARS[1]),
         dl_total=cumulative(STRAIN_VARS[2]),
         soh_ref_index=np.array(1 if cond.partial else -1),
