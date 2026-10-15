@@ -644,8 +644,8 @@ baseline crack_baseline_v3.** The implementation is as described below. The
 earlier "small effect" result was obtained before the item-14 fix. On the
 fixed core, θ = 1 adds +4–5pp of LLI after the knee, leaves the knee and Si
 LAM unchanged, and lowers Gr LAM (compensated with a higher Gr redirect
-yield). It recovers ~16–19 mV of the 25 °C late-RPT voltage gap. See
-`study_si_deg/FINDINGS.md`.
+yield). It recovers ~16–19 mV of the 25 °C late-RPT voltage gap (study notes, not on
+this branch).
 
 **Idea.** Isolated material would carry
 $c_{\mathrm{trap}} = (1-\theta)\,\bar c_s + \theta\, c_{s,\max}$ of lithium

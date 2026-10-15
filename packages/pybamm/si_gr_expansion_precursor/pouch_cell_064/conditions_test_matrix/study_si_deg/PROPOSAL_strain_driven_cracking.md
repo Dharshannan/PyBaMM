@@ -12,21 +12,18 @@ the knee calibration and the three-condition refit plan.
 
 ## 1. Motivation
 
-There are four cells at 103 kPa with C/3 cycling. The table gives each
-cell's knee and its cumulative reversible cell-expansion swing up to that
-knee. Swings are measured per ageing cycle from the lifetime expansion data
-(`extract_lifetime_reversible_expansion.py`).
+There are four cells at 103 kPa with C/3 cycling:
 
-| Cell | Window, T | Knee (EFC since RPT1) | Cycles to knee | Pre-knee swing per cycle | Cumulative swing to knee |
-|---|---|---|---|---|---|
-| CELL064 | 0–100%, 25 °C | ~101 | ~104 | 54.6 µm | **5,700 µm** |
-| CELL017 | 0–100%, 45 °C | ~310 | ~316 | 51.4 µm | **16,300 µm** |
-| CELL009 | 15–95%, 25 °C | ~290 | ~377 | 37.1 µm | **14,000 µm** |
-| CELL026 | 20–80%, 25 °C | ~293 | ~488 | 31.7 µm | **15,500 µm** |
+| Cell | Window, T | Knee (EFC since RPT1) |
+|---|---|---|
+| CELL064 | 0–100%, 25 °C | ~101 |
+| CELL017 | 0–100%, 45 °C | ~310 |
+| CELL009 | 15–95%, 25 °C | ~290 |
+| CELL026 | 20–80%, 25 °C | ~293 |
 
-**Three of the four cells knee at about the same cumulative swing (and EFC),**
-across two temperatures and three SoC windows. Only CELL064 (full window,
-25 °C) knees about 3× earlier.
+**Three of the four cells knee at about the same EFC,** across two
+temperatures and three SoC windows. Only CELL064 (full window, 25 °C) knees
+about 3× earlier.
 
 The current model has route A only. To reproduce the other cells it needs
 two condition-specific corrections:
@@ -38,7 +35,7 @@ two condition-specific corrections:
   1e3). During the C/3 partial cycles the model's peak Si surface stress is
   ~2 MPa, against ~35 MPa during the full-depth C/20 RPTs. The model's
   partial-window cells crack almost only during their RPTs. Plain v3 does
-  knee on CELL009, but at EFC ~500–550 (FINDINGS.md), through slow pore
+  knee on CELL009, but at EFC ~500–550 (study notes), through slow pore
   clogging rather than crack growth.
 
 **Hypothesis: two independent damage routes.**
@@ -169,8 +166,7 @@ must be read off the model (step 0 below). If $\bar s$ stays partly lithiated
 at a window's bottom, $\Delta\varepsilon_V$ shrinks.
 
 **Prediction.** One $k_V$ should put every route-B-dominated cell's knee at
-the same $\mathcal{E}_{\mathrm{knee}}$. That is the model-side counterpart of
-the common ~15,000 µm cumulative swing in the data. Because $D$ uses the Si
+the same $\mathcal{E}_{\mathrm{knee}}$. Because $D$ uses the Si
 strain, not cell throughput, a window that mostly cycles graphite
 accumulates little $\mathcal{E}$. That matches the published finding that
 window position matters (Jossen group 2024; Dressler & Dahn 2025).
@@ -197,9 +193,8 @@ $p = 1$ recovers B1. Use it only if the cells can't be fitted with $p = 1$.
 - `SI_CRACK_EAC`: route A's own stress drop at 45 °C does the job.
 - The CELL009 crack multiplier ×11: replaced by route B.
 
-**Caveat: strain vs throughput.** Swing per EFC is ~48–56 µm for all four
-cells, so cumulative swing and Ah throughput can't be separated with these
-cells alone. A throughput variant ($D \propto |j_{\mathrm{Si}}|$) would fit
+**Caveat: strain vs throughput.** The cells' cumulative Si swing and Ah
+throughput can't be separated with these cells alone. A throughput variant ($D \propto |j_{\mathrm{Si}}|$) would fit
 them equally well. Two things discriminate:
 - the published result that window position matters, which favours Si strain;
 - the 2C cells (CELL056/074, knees ~143–148 EFC) and the pressure series.
