@@ -28,13 +28,13 @@ parameter set covers four test conditions:
 | `sigr/analysis.py` | scores: SoH gap, voltage RMSE, knee, LLI/LAM, crack state |
 | `sigr/plots.py` | figures |
 | `tools/run_condition.py` | command-line run of one condition |
-| `tools/build_data_bundle.py` | assembles `data/` from the study's files (author use) |
+| `tools/build_data_bundle.py` | assembles `data/` from the authors' working files (author use; not runnable from this repository) |
 | `environment.yml` | pinned environment |
+| `docs/CHANGES.md`, `docs/MODEL_EQUATIONS.md` | model changes to PyBaMM, and the degradation equations |
 
-The model changes to PyBaMM are documented in
-`packages/pybamm/si_gr_expansion_precursor/CHANGES.md`, and the degradation
-equations in
-`packages/pybamm/si_gr_expansion_precursor/pouch_cell_064/conditions_test_matrix/study_si_deg/si_volume_cracks/MODEL_EQUATIONS.md`.
+The model changes to PyBaMM are documented in `docs/CHANGES.md`, and the
+degradation equations (isolation LAM, strain-fatigue cracking) in
+`docs/MODEL_EQUATIONS.md`.
 
 ## Install
 

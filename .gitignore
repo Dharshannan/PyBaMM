@@ -125,3 +125,6 @@ test_callback.log
 
 # log files
 setup.log
+
+# Paper branch: the study working folder is not part of this release
+packages/pybamm/si_gr_expansion_precursor/
