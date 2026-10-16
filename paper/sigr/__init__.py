@@ -8,6 +8,7 @@ PyBaMM in this repository.
     res, curves = sigr.analysis.load("25deg_full_soc", out_dir)
     sigr.plots.save_all(res, curves, sigr.CONDITIONS["25deg_full_soc"], data_dir, out_dir)
 """
+import multiprocessing
 import os
 import time
 from concurrent.futures import ProcessPoolExecutor, wait
@@ -65,7 +66,9 @@ def run_all(data_dir, out_dir, keys=None, rate_basis_ah=RATE_BASIS_AH, efc_basis
     print(f"Running {len(keys)} condition(s) on {workers} worker process(es); logs: {out_dir}/<condition>_log.txt",
           flush=True)
     t0 = time.time()
-    with ProcessPoolExecutor(max_workers=workers) as pool:
+    # "spawn": fresh worker processes. Forking a kernel that already runs threads
+    # (e.g. JAX on Colab) can deadlock.
+    with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn")) as pool:
         futures = {pool.submit(_run_logged, j): j[0] for j in jobs}
         pending = set(futures)
         while pending:
