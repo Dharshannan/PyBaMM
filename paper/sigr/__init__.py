@@ -19,11 +19,10 @@ from .parameters import MODEL_OPTIONS, V6, parameter_values  # noqa: F401
 
 
 def run_condition(key, data_dir, out_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, log=print):
-    """Simulate one condition (~1-1.5 h), save <key>_results.npz and
+    """Simulate one condition (~20-40 min on one core), save <key>_results.npz and
     <key>_rpt_curves.csv to out_dir, and return (results, rpt_curves)."""
     cond = CONDITIONS[key]
-    sol = simulate.run(cond, data_dir, rate_basis_ah, efc_basis_ah, log=log)
-    res, curves = simulate.reduce(sol, cond, efc_basis_ah)
+    res, curves = simulate.run(cond, data_dir, rate_basis_ah, efc_basis_ah, log=log)
     analysis.save(res, curves, key, out_dir)
     return res, curves
 
@@ -56,10 +55,10 @@ def _last_line(path):
 
 def run_all(data_dir, out_dir, keys=None, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH,
             max_workers=None, report_every_s=300):
-    """Simulate several conditions in parallel worker processes (~1-1.5 h each
+    """Simulate several conditions in parallel worker processes (~20-40 min each
     with one core per condition), printing each condition's latest progress
     line every report_every_s seconds. max_workers defaults to
-    min(#conditions, #CPUs); each run needs ~2-3 GB of RAM."""
+    min(#conditions, #CPUs); each run needs ~1 GB of RAM."""
     keys = list(keys or CONDITIONS)
     workers = max_workers or max(1, min(len(keys), os.cpu_count() or 1))
     jobs = [(k, data_dir, out_dir, rate_basis_ah, efc_basis_ah) for k in keys]

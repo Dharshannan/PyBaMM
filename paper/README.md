@@ -29,6 +29,7 @@ parameter set covers four test conditions:
 | `sigr/plots.py` | figures |
 | `tools/run_condition.py` | command-line run of one condition |
 | `tools/build_data_bundle.py` | assembles `data/` from the authors' working files (author use; not runnable from this repository) |
+| `results/` | the paper's precomputed model results (loaded when `RUN_SIMULATIONS = False`) |
 | `environment.yml` | pinned environment |
 | `docs/CHANGES.md`, `docs/MODEL_EQUATIONS.md` | model changes to PyBaMM, and the degradation equations |
 
@@ -56,9 +57,9 @@ Download the data record (Zenodo DOI: *to be added*) and unpack it here:
 - `data/`: per cell, the capacity fade, LLI and LAM, plus the C/20 RPT
   discharge curves. Also the
   beginning-of-life OCPs (`data/ocp/`). EFC = throughput / (2 × 2.5 Ah).
-- `outputs/` (optional): the model results of the paper runs
-  (`<condition>_results.npz`, `<condition>_rpt_curves.csv`), for replotting
-  without re-simulating.
+The paper's precomputed model results are in `results/`
+(`<condition>_results.npz`, `<condition>_rpt_curves.csv`); new runs go to
+`outputs/`.
 
 ## Run
 
@@ -67,8 +68,8 @@ jupyter lab reproduce_paper.ipynb
 ```
 
 **In the notebook:**
-- By default it simulates all four conditions, in parallel processes, then scores and plots them. Each condition takes about 1–1.5 h on one core and needs about 2–3 GB of RAM, so a 4-core machine needs about 1.5 h in total.
-- `RUN_SIMULATIONS = False` replots from results already in `outputs/`.
+- By default it simulates all four conditions, in parallel processes, then scores and plots them. On one core a condition takes about 20–40 min and needs about 1 GB of RAM, so a 4-core machine needs about 40 min in total, and free Colab (2 cores) about 1–1.5 h.
+- `RUN_SIMULATIONS = False` skips the simulations. It loads the paper's precomputed results (`results/`, in this repository), or your own results in `outputs/` where they exist.
 
 **From the command line,** one condition at a time:
 

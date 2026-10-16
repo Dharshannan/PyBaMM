@@ -1,6 +1,6 @@
 """Run one condition: formation, then C/3 ageing in chunks with a C/20 RPT
-placed at each real RPT's EFC (aligned RPTs), then reduce the solution to
-compact results.
+placed at each real RPT's EFC (aligned RPTs), collecting compact results
+chunk by chunk.
 
 Protocol:
 - Formation (from 100% SoC): C/20 discharge to 2.5 V, C/3 CC-CV charge to
@@ -112,8 +112,106 @@ def rpt_discharge_curve(cyc):
     return best
 
 
+class _Collector:
+    """Builds the compact results chunk by chunk, so only the current chunk's
+    solution is ever held in memory. Per-cycle and per-RPT quantities are kept
+    in full; the life time series (LAM, LLI, crack diagnostics) are sampled
+    every dthr A.h of throughput; time integrals are accumulated at full
+    resolution across chunks."""
+
+    SERIES = ("thr", "LAM_gr", "LAM_si", "LAM_pos", "Q_side", "Q_lli_lam_trap", "Q_lli_particles",
+              "crack_length", "roughness", "Q_si_sei", "Q_si_sei_cracks", "strain_E", "dl_strain", "dl_total")
+
+    def __init__(self, cond, efc_basis_ah, dthr=0.1):
+        self.cond, self.efc_basis_ah, self.dthr = cond, efc_basis_ah, dthr
+        self.age_cap, self.age_thr, self.age_porosity, self.age_cycle_thr = [], [], [], []
+        self.rpt_cap, self.rpt_thr, self.curves, self.cyc_thr, self.cyc_sig = [], [], [], [], []
+        self.series = {k: [] for k in self.SERIES}
+        self.integral = {name: 0.0 for name in STRAIN_VARS}
+        self.next_thr = None
+        self.initial_porosity = None
+
+    def add(self, sol):
+        for cyc in sol.cycles:
+            if cyc["Time [s]"].entries.size < 2:  # the one-point cycle a chunk starts from
+                continue
+            thr = cyc["Throughput capacity [A.h]"].entries
+            thr_end = float(thr[-1])
+            self.cyc_sig.append(float(np.max(np.abs(cyc[CRACK_VARS[2]].entries))) / 1e6)
+            self.cyc_thr.append(thr_end)
+            cap, end_thr = ageing_discharge(cyc)
+            if cap > 0 and end_thr is not None:
+                self.age_cap.append(cap)
+                self.age_thr.append(thr_end)
+                self.age_porosity.append(float(np.min(cyc[POROSITY].entries)))
+                self.age_cycle_thr.append(float(thr[-1] - thr[0]))
+                continue
+            rcap, rend = rpt_discharge(cyc)
+            if rcap > 0 and rend is not None:
+                self.rpt_cap.append(rcap)
+                self.rpt_thr.append(thr_end)
+                q, v = rpt_discharge_curve(cyc)
+                if q is not None:
+                    self.curves.append(dict(thr=thr_end, q=q, v=v))
+
+        thr = np.asarray(sol["Throughput capacity [A.h]"].entries, dtype=float)
+        t = np.asarray(sol["Time [s]"].entries, dtype=float)
+        if self.initial_porosity is None:
+            self.initial_porosity = float(sol[POROSITY].entries[0])
+        cum = {}
+        for name in STRAIN_VARS:  # running time integrals, at full resolution
+            y = np.asarray(sol[name].entries, dtype=float)
+            cum[name] = self.integral[name] + np.concatenate([[0.0], np.cumsum(0.5 * (y[1:] + y[:-1]) * np.diff(t))])
+            self.integral[name] = float(cum[name][-1])
+        if self.next_thr is None:
+            self.next_thr = thr[0]
+        grid = np.arange(self.next_thr, thr[-1] + 1e-12, self.dthr)
+        if grid.size == 0:
+            return
+        idx = np.unique(np.clip(np.searchsorted(thr, grid), 0, thr.size - 1))
+        self.next_thr = grid[-1] + self.dthr
+        to_ah = F / 3600.0
+
+        def col(name, scale=1.0):
+            return np.asarray(sol[name].entries, dtype=float)[idx] * scale
+
+        new = dict(
+            thr=thr[idx],
+            LAM_gr=col("Loss of active material in primary phase in negative electrode [%]"),
+            LAM_si=col("Loss of active material in secondary phase in negative electrode [%]"),
+            LAM_pos=col("Loss of active material in positive electrode [%]"),
+            Q_side=col("Total capacity lost to side reactions [A.h]"),
+            Q_lli_lam_trap=sum(col(f"Loss of lithium due to loss of {p}active material in {d} electrode [mol]", to_ah)
+                               for p, d in (("primary ", "negative"), ("secondary ", "negative"), ("", "positive"))),
+            Q_lli_particles=col("Total lithium lost from particles [mol]", to_ah),
+            crack_length=col(CRACK_VARS[0]), roughness=col(CRACK_VARS[1]),
+            Q_si_sei=col(CRACK_VARS[3], to_ah), Q_si_sei_cracks=col(CRACK_VARS[4], to_ah),
+            strain_E=cum[STRAIN_VARS[0]][idx], dl_strain=cum[STRAIN_VARS[1]][idx], dl_total=cum[STRAIN_VARS[2]][idx],
+        )
+        for k, v in new.items():
+            self.series[k].append(v)
+
+    def efc_per_cycle(self):
+        """EFC of the last ageing cycle (None before the first one)."""
+        return self.age_cycle_thr[-1] / (2 * self.efc_basis_ah) if self.age_cycle_thr else None
+
+    def finish(self):
+        res = {k: np.concatenate(v) for k, v in self.series.items()}
+        res.update(
+            age_cap=np.array(self.age_cap), age_thr=np.array(self.age_thr),
+            age_min_porosity=np.array(self.age_porosity), initial_porosity=np.array(self.initial_porosity),
+            rpt_cap=np.array(self.rpt_cap), rpt_thr=np.array(self.rpt_thr),
+            cycle_thr=np.array(self.cyc_thr), cycle_peak_stress_MPa=np.array(self.cyc_sig),
+            soh_ref_index=np.array(1 if self.cond.partial else -1), efc_basis_ah=np.array(self.efc_basis_ah),
+        )
+        res["dl_paris"] = res["dl_total"] - res["dl_strain"]
+        return res, self.curves
+
+
 def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, log=print):
-    """Simulate one condition; returns the pybamm Solution."""
+    """Simulate one condition; returns (results, rpt_curves) (see _Collector).
+    Each chunk starts from the previous chunk's last state only (which is all
+    PyBaMM uses to continue a run), so memory use stays flat over the run."""
     model = pybamm.lithium_ion.DFN(dict(MODEL_OPTIONS))
     param = parameter_values(cond, data_dir, rate_basis_ah)
     solver = pybamm.IDAKLUSolver(root_tol=SOLVER_TOL, atol=SOLVER_TOL, rtol=SOLVER_TOL,
@@ -123,14 +221,14 @@ def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, 
         return pybamm.Simulation(model, parameter_values=param, experiment=experiment,
                                  solver=this_solver, var_pts=VAR_PTS)
 
-    def solve_with_retry(experiment, last_sol, label):
+    def solve_with_retry(experiment, state, label):
         last_exc = None
         for attempt, mult in enumerate([1.0] + RETRY_TOL_MULTIPLIERS):
             tol = SOLVER_TOL * mult
             this_solver = solver if mult == 1.0 else pybamm.IDAKLUSolver(
                 root_tol=tol, atol=tol, rtol=tol, output_variables=OUTPUT_VARIABLES)
             try:
-                sol = make_sim(experiment, this_solver).solve(starting_solution=last_sol)
+                sol = make_sim(experiment, this_solver).solve(starting_solution=state)
                 if attempt:
                     log(f"[{label}] recovered on retry {attempt} (tol={tol:.0e})")
                 return sol
@@ -139,17 +237,8 @@ def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, 
         log(f"[{label}] solver failure, retries exhausted: {type(last_exc).__name__}: {str(last_exc)[:200]}")
         return None
 
-    def efc_now(sol):
-        return float(sol["Throughput capacity [A.h]"].entries[-1]) / (2 * efc_basis_ah)
-
-    def efc_per_cycle(sol):
-        for cyc in reversed(sol.cycles):
-            cap, _ = ageing_discharge(cyc)
-            if cap > 0:
-                thr = cyc["Throughput capacity [A.h]"].entries
-                return float(thr[-1] - thr[0]) / (2 * efc_basis_ah)
-        q = sol.cycles[0]["Discharge capacity [A.h]"].entries
-        return float(q.max() - q.min()) / MODEL_CAPACITY_AH
+    def efc_now(state):
+        return float(state["Throughput capacity [A.h]"].entries[-1]) / (2 * efc_basis_ah)
 
     age = ageing_cycle(cond, rate_basis_ah)
     rpt = (f"Discharge at {RPT_RATE} until {LOWER_CUTOFF_V} V", f"Charge at C/3 until {UPPER_CUTOFF_V} V",
@@ -161,115 +250,54 @@ def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, 
     log(f"{cond.label}: ageing cycle: " + " | ".join(age))
     log(f"{cond.label}: RPT cycle: " + " | ".join(rpt))
 
+    out = _Collector(cond, efc_basis_ah)
     # Three one-step cycles, so the formation RPT is placed at the end of its discharge.
     formation = pybamm.Experiment([f"Discharge at {RPT_RATE} until {LOWER_CUTOFF_V} V",
                                    f"Charge at C/3 until {UPPER_CUTOFF_V} V",
                                    f"Hold at {UPPER_CUTOFF_V} V until C/50"])
     sol = make_sim(formation, solver).solve(initial_soc=1.0)
+    q = sol.cycles[0]["Discharge capacity [A.h]"].entries
+    epc_formation = float(q.max() - q.min()) / MODEL_CAPACITY_AH  # EFC per cycle before any ageing
+    out.add(sol)
+    state = sol.last_state
+    del sol
     if cond.partial:  # conditioned reference RPT (the SoH reference)
-        new = solve_with_retry(pybamm.Experiment([rpt[-3:]]), sol, "RPT@ref")
+        new = solve_with_retry(pybamm.Experiment([rpt[-3:]]), state, "RPT@ref")
         if new is not None:
-            sol = new
+            out.add(new)
+            state = new.last_state
 
-    n_age, stop, first_cap = 0, "all real RPT EFCs reached", None
+    n_age, stop = 0, "all real RPT EFCs reached"
     for target in data.rpt_targets(cond, data_dir):
         while True:
-            e, epc = efc_now(sol), efc_per_cycle(sol)
+            e, epc = efc_now(state), out.efc_per_cycle() or epc_formation
             if target - e <= 0.5 * epc:
                 break
             n = int(min(BATCH_SIZE, max(1, np.floor((target - e) / epc + 0.5))))
             if n_age + n > MAX_TOTAL_CYCLES:
                 stop = "reached MAX_TOTAL_CYCLES"
                 break
-            new = solve_with_retry(pybamm.Experiment([age] * n), sol, f"AGE x{n}")
+            new = solve_with_retry(pybamm.Experiment([age] * n), state, f"AGE x{n}")
             if new is None:
                 stop = f"solver failure before RPT at EFC {target:.0f}"
                 break
-            sol, n_age = new, n_age + n
-            caps = [c for c, _ in (ageing_discharge(cyc) for cyc in sol.cycles) if c > 0]
-            first_cap = first_cap or caps[0]
-            soh = 100 * caps[-1] / first_cap
-            log(f"[AGE] +{n} cycles ({n_age} total), EFC={efc_now(sol):.1f} -> {target:.1f}, SoH={soh:.2f}%")
+            out.add(new)
+            state, n_age = new.last_state, n_age + n
+            del new
+            soh = 100 * out.age_cap[-1] / out.age_cap[0]
+            log(f"[AGE] +{n} cycles ({n_age} total), EFC={efc_now(state):.1f} -> {target:.1f}, SoH={soh:.2f}%")
             if soh <= SOH_FLOOR_PERCENT:
                 stop = f"reached {SOH_FLOOR_PERCENT:.0f}% SoH floor"
                 break
         if stop != "all real RPT EFCs reached":
             break
-        new = solve_with_retry(pybamm.Experiment([rpt]), sol, f"RPT@{target:.1f}")
+        new = solve_with_retry(pybamm.Experiment([rpt]), state, f"RPT@{target:.1f}")
         if new is None:
             stop = f"solver failure at RPT EFC {target:.0f}"
             break
-        sol = new
+        out.add(new)
+        state = new.last_state
+        del new
+        log(f"[RPT] at EFC {efc_now(state):.1f} (real RPT at {target:.1f})")
     log(f"{cond.label}: stop reason: {stop}")
-    return sol
-
-
-def _downsample_index(x, n):
-    grid = np.linspace(x[0], x[-1], n)
-    return np.unique(np.clip(np.searchsorted(x, grid), 0, x.size - 1))
-
-
-def reduce(sol, cond, efc_basis_ah=EFC_BASIS_AH, n_series=20000):
-    """Compact results: per-cycle and per-RPT quantities in full; the life
-    time series (LAM, LLI, crack diagnostics; whole run including the final
-    RPT) on n_series points evenly spaced in throughput. Everything the
-    scores and figures need, nothing else."""
-    age_cap, age_thr, age_porosity, rpt_cap, rpt_thr, curves = [], [], [], [], [], []
-    cyc_thr, cyc_sig = [], []
-    for cyc in sol.cycles:
-        thr_end = float(cyc["Throughput capacity [A.h]"].entries[-1])
-        try:
-            cyc_sig.append(float(np.max(np.abs(cyc[CRACK_VARS[2]].entries))) / 1e6)
-            cyc_thr.append(thr_end)
-        except Exception:  # noqa: BLE001
-            pass
-        cap, end_thr = ageing_discharge(cyc)
-        if cap > 0 and end_thr is not None:
-            age_cap.append(cap)
-            age_thr.append(thr_end)
-            age_porosity.append(float(np.min(cyc[POROSITY].entries)))
-            continue
-        rcap, rend = rpt_discharge(cyc)
-        if rcap > 0 and rend is not None:
-            rpt_cap.append(rcap)
-            rpt_thr.append(thr_end)
-            q, v = rpt_discharge_curve(cyc)
-            if q is not None:
-                curves.append((thr_end, q, v))
-
-    qt_full = sol["Throughput capacity [A.h]"].entries
-    t = sol["Time [s]"].entries
-    idx = _downsample_index(qt_full, n_series)
-
-    def series(name, scale=1.0):
-        return np.asarray(sol[name].entries, dtype=float)[idx] * scale
-
-    def cumulative(name):  # time integral, at full resolution then sampled
-        y = np.asarray(sol[name].entries, dtype=float)
-        c = np.concatenate([[0.0], np.cumsum(0.5 * (y[1:] + y[:-1]) * np.diff(t))])
-        return c[idx]
-
-    to_ah = F / 3600.0
-    res = dict(
-        age_cap=np.array(age_cap), age_thr=np.array(age_thr), age_min_porosity=np.array(age_porosity),
-        initial_porosity=np.array(float(sol[POROSITY].entries[0])),
-        rpt_cap=np.array(rpt_cap), rpt_thr=np.array(rpt_thr),
-        cycle_thr=np.array(cyc_thr), cycle_peak_stress_MPa=np.array(cyc_sig),
-        thr=qt_full[idx],
-        LAM_gr=series("Loss of active material in primary phase in negative electrode [%]"),
-        LAM_si=series("Loss of active material in secondary phase in negative electrode [%]"),
-        LAM_pos=series("Loss of active material in positive electrode [%]"),
-        Q_side=series("Total capacity lost to side reactions [A.h]"),
-        Q_lli_lam_trap=sum(series(f"Loss of lithium due to loss of {p}active material in {d} electrode [mol]", to_ah)
-                           for p, d in (("primary ", "negative"), ("secondary ", "negative"), ("", "positive"))),
-        Q_lli_particles=series("Total lithium lost from particles [mol]", to_ah),
-        crack_length=series(CRACK_VARS[0]), roughness=series(CRACK_VARS[1]),
-        Q_si_sei=series(CRACK_VARS[3], to_ah), Q_si_sei_cracks=series(CRACK_VARS[4], to_ah),
-        strain_E=cumulative(STRAIN_VARS[0]), dl_strain=cumulative(STRAIN_VARS[1]),
-        dl_total=cumulative(STRAIN_VARS[2]),
-        soh_ref_index=np.array(1 if cond.partial else -1),
-        efc_basis_ah=np.array(efc_basis_ah),
-    )
-    res["dl_paris"] = res["dl_total"] - res["dl_strain"]
-    rpt_curves = [dict(thr=th, q=q, v=v) for th, q, v in curves]
-    return res, rpt_curves
+    return out.finish()
