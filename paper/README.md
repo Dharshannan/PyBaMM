@@ -56,8 +56,9 @@ Download the data record (Zenodo DOI: *to be added*) and unpack it here:
 - `data/`: per cell, the capacity fade, LLI and LAM, plus the C/20 RPT
   discharge curves. Also the
   beginning-of-life OCPs (`data/ocp/`). EFC = throughput / (2 × 2.5 Ah).
-- `outputs/` (optional): the precomputed model outputs
-  (`<condition>_results.npz`, `<condition>_rpt_curves.csv`).
+- `outputs/` (optional): the model results of the paper runs
+  (`<condition>_results.npz`, `<condition>_rpt_curves.csv`), for replotting
+  without re-simulating.
 
 ## Run
 
@@ -66,10 +67,8 @@ jupyter lab reproduce_paper.ipynb
 ```
 
 **In the notebook:**
-- `RUN_SIMULATIONS = False` (default) loads `outputs/` and regenerates every
-  score and figure.
-- `RUN_SIMULATIONS = True` re-simulates: about 1–1.5 h per condition, run in
-  parallel processes.
+- By default it simulates all four conditions, in parallel processes, then scores and plots them. Each condition takes about 1–1.5 h on one core and needs about 2–3 GB of RAM, so a 4-core machine needs about 1.5 h in total.
+- `RUN_SIMULATIONS = False` replots from results already in `outputs/`.
 
 **From the command line,** one condition at a time:
 

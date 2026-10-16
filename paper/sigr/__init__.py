@@ -4,10 +4,13 @@ CELL009 25 degC 15-95% SoC, CELL026 25 degC 20-80% SoC) with the modified
 PyBaMM in this repository.
 
     import sigr
-    res, curves = sigr.run_condition("25deg_full_soc", data_dir, out_dir)
+    sigr.run_all(data_dir, out_dir)                    # all four, in parallel
+    res, curves = sigr.analysis.load("25deg_full_soc", out_dir)
     sigr.plots.save_all(res, curves, sigr.CONDITIONS["25deg_full_soc"], data_dir, out_dir)
 """
-from concurrent.futures import ProcessPoolExecutor
+import os
+import time
+from concurrent.futures import ProcessPoolExecutor, wait
 
 from . import analysis, data, plots, simulate  # noqa: F401
 from .conditions import CONDITIONS, EFC_BASIS_AH, RATE_BASIS_AH  # noqa: F401
@@ -24,17 +27,52 @@ def run_condition(key, data_dir, out_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis
     return res, curves
 
 
-def _run_quiet(args):
+def _log_path(key, out_dir):
+    return os.path.join(out_dir, f"{key}_log.txt")
+
+
+def _run_logged(args):
+    """One condition in a worker process; progress goes to <key>_log.txt."""
     key, data_dir, out_dir, rate_basis_ah, efc_basis_ah = args
-    run_condition(key, data_dir, out_dir, rate_basis_ah, efc_basis_ah, log=lambda *a: None)
+    os.makedirs(out_dir, exist_ok=True)
+    with open(_log_path(key, out_dir), "w", encoding="utf-8") as fh:
+        def log(*a):
+            print(*a, file=fh, flush=True)
+        t0 = time.time()
+        run_condition(key, data_dir, out_dir, rate_basis_ah, efc_basis_ah, log=log)
+        log(f"done in {(time.time() - t0) / 3600:.2f} h")
     return key
 
 
-def run_all(data_dir, out_dir, keys=None, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, parallel=True):
-    """Simulate several conditions, in parallel processes by default."""
+def _last_line(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            lines = [ln.strip() for ln in fh if ln.strip()]
+        return lines[-1] if lines else "starting"
+    except OSError:
+        return "queued"
+
+
+def run_all(data_dir, out_dir, keys=None, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH,
+            max_workers=None, report_every_s=300):
+    """Simulate several conditions in parallel worker processes (~1-1.5 h each
+    with one core per condition), printing each condition's latest progress
+    line every report_every_s seconds. max_workers defaults to
+    min(#conditions, #CPUs); each run needs ~2-3 GB of RAM."""
     keys = list(keys or CONDITIONS)
+    workers = max_workers or max(1, min(len(keys), os.cpu_count() or 1))
     jobs = [(k, data_dir, out_dir, rate_basis_ah, efc_basis_ah) for k in keys]
-    if not parallel:
-        return [_run_quiet(j) for j in jobs]
-    with ProcessPoolExecutor(max_workers=len(jobs)) as pool:
-        return list(pool.map(_run_quiet, jobs))
+    print(f"Running {len(keys)} condition(s) on {workers} worker process(es); logs: {out_dir}/<condition>_log.txt",
+          flush=True)
+    t0 = time.time()
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_run_logged, j): j[0] for j in jobs}
+        pending = set(futures)
+        while pending:
+            done, pending = wait(pending, timeout=report_every_s)
+            for f in done:
+                f.result()  # re-raises a failed run's exception
+            print(f"--- {(time.time() - t0) / 60:.0f} min", flush=True)
+            for k in keys:
+                print(f"  {k:<17} {_last_line(_log_path(k, out_dir))[:110]}", flush=True)
+    return keys
