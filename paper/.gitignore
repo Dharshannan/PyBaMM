@@ -6,3 +6,7 @@ __pycache__/
 *.zip
 manuscript/
 manuscript_overleaf/
+outputs_ablations/
+
+# copyrighted paper PDFs for checking citations (never commit)
+literature_pdfs/

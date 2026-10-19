@@ -27,6 +27,7 @@ parameter set covers four test conditions:
 | `sigr/data.py` | experimental-data loading (EFC since each cell's RPT1) |
 | `sigr/analysis.py` | scores: SoH gap, voltage RMSE, knee, LLI/LAM, crack state |
 | `sigr/plots.py` | figures |
+| `sigr/ablations.py` | fixed-parameter ablations (one mechanism off), their comparison table and figure |
 | `tools/run_condition.py` | command-line run of one condition |
 | `tools/build_data_bundle.py` | assembles `data/` from the authors' working files (author use; not runnable from this repository) |
 | `results/` | the paper's precomputed model results (loaded when `RUN_SIMULATIONS = False`) |
@@ -81,6 +82,16 @@ python tools/run_condition.py 25deg_full_soc --data data --out outputs
 2.5947 Ah, for both (C/3 = 0.865 A). The tests use the 2.5 Ah nominal
 capacity (C/3 = 0.833 A). Set `RATE_BASIS_AH` and `EFC_BASIS_AH` (or
 `--rate-basis-ah` / `--efc-basis-ah`) to 2.5 for the test-protocol basis.
+
+**Ablations.** Each switches one mechanism off and keeps every other
+parameter at its fitted value (10 runs, about 1 h on 10 cores):
+
+```python
+import sigr.ablations as ab
+ab.run_ablations("data", "outputs_ablations")
+ab.compare("data", "outputs_ablations", "results")          # table vs the full model
+ab.figure("data", "outputs_ablations", "results").savefig("ablations.png")
+```
 
 ## Reproducibility
 

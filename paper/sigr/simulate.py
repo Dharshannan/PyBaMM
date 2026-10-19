@@ -21,7 +21,7 @@ import pybamm
 from . import data
 from .conditions import (LOWER_CUTOFF_V, MODEL_CAPACITY_AH, RATE_BASIS_AH, EFC_BASIS_AH, RPT_RATE,
                          UPPER_CUTOFF_V, ageing_cycle)
-from .parameters import MODEL_OPTIONS, VAR_PTS, parameter_values
+from .parameters import MODEL_OPTIONS, V6, VAR_PTS, parameter_values
 
 SOLVER_TOL = 1e-6
 RETRY_TOL_MULTIPLIERS = [10.0, 0.1, 100.0, 0.01]
@@ -208,12 +208,13 @@ class _Collector:
         return res, self.curves
 
 
-def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, log=print):
+def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, log=print, options=None, params=None):
     """Simulate one condition; returns (results, rpt_curves) (see _Collector).
     Each chunk starts from the previous chunk's last state only (which is all
-    PyBaMM uses to continue a run), so memory use stays flat over the run."""
-    model = pybamm.lithium_ion.DFN(dict(MODEL_OPTIONS))
-    param = parameter_values(cond, data_dir, rate_basis_ah)
+    PyBaMM uses to continue a run), so memory use stays flat over the run.
+    options / params: overrides of MODEL_OPTIONS / V6 (e.g. for ablations)."""
+    model = pybamm.lithium_ion.DFN({**MODEL_OPTIONS, **(options or {})})
+    param = parameter_values(cond, data_dir, rate_basis_ah, p={**V6, **(params or {})})
     solver = pybamm.IDAKLUSolver(root_tol=SOLVER_TOL, atol=SOLVER_TOL, rtol=SOLVER_TOL,
                                  output_variables=OUTPUT_VARIABLES)
 
