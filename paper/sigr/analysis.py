@@ -192,6 +192,19 @@ def crack_table(res):
     return pd.DataFrame(rows)
 
 
+def knee_summary(res, cond, data_dir):
+    """Knee comparison (notebook only, not a paper score): the model knee is the
+    steepest descent of the C/3 ageing SoH, plus its SoH-91% crossing; the
+    measured knee is the intersection of straight-line fits at the beginning
+    and end of life. NaN for partial windows, whose C/3 ageing discharge is
+    the window rather than the cell capacity."""
+    kn = knee(res, cond, data_dir)
+    if cond.partial:
+        kn.update(knee_efc=np.nan, soh91_efc=np.nan)
+    return dict(condition=cond.key, cell=cond.cell, model_knee_efc=kn["knee_efc"],
+                model_soh91_efc=kn["soh91_efc"], real_knee_efc=kn["real_knee_efc"])
+
+
 def summary(res, curves, cond, data_dir):
     """Headline scores for one condition (the paper's): mean |SoH gap| at the
     real C/20 RPTs [pp], and the mean C/20 voltage and dV/dSOC RMSEs."""
