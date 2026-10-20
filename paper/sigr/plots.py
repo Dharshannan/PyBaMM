@@ -81,16 +81,7 @@ def overall_summary(res, curves, cond, data_dir):
     return fig
 
 
-def _smooth_dvdsoc(soc, v, n_bins=120):
-    """Bin V on a uniform depth-of-discharge grid, then differentiate."""
-    o = np.argsort(soc)
-    soc, v = np.asarray(soc)[o], np.asarray(v)[o]
-    edges = np.linspace(0.0, 1.0, n_bins + 1)
-    mid = 0.5 * (edges[:-1] + edges[1:])
-    vb = np.array([v[(soc >= lo) & (soc < hi)].mean() if ((soc >= lo) & (soc < hi)).any() else np.nan
-                   for lo, hi in zip(edges[:-1], edges[1:])])
-    ok = ~np.isnan(vb)
-    return (mid[ok], np.gradient(vb[ok], mid[ok])) if ok.sum() >= 3 else (mid[ok], np.full(ok.sum(), np.nan))
+_smooth_dvdsoc = an.smooth_dvdsoc  # one definition, shared with the dV/dSOC score
 
 
 def rpt_dod(res, curves, cond, data_dir, kind="voltage", trim=0.01):

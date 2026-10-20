@@ -117,6 +117,41 @@ def voltage_rmse(res, curves, cond, data_dir):
     return pd.DataFrame(rows, columns=["rpt", "real_efc", "model_efc", "rmse_V"])
 
 
+DVDSOC_TRIM = 0.01  # the model's first ~1% DoD is the step-start transient (dropped, as in the plots)
+DVDSOC_WINDOW = (0.02, 0.95)  # DoD range scored: excludes the end-of-discharge cliff
+
+
+def smooth_dvdsoc(soc, v, n_bins=120):
+    """Bin V on a uniform depth-of-discharge grid, then differentiate."""
+    o = np.argsort(soc)
+    soc, v = np.asarray(soc)[o], np.asarray(v)[o]
+    edges = np.linspace(0.0, 1.0, n_bins + 1)
+    mid = 0.5 * (edges[:-1] + edges[1:])
+    vb = np.array([v[(soc >= lo) & (soc < hi)].mean() if ((soc >= lo) & (soc < hi)).any() else np.nan
+                   for lo, hi in zip(edges[:-1], edges[1:])])
+    ok = ~np.isnan(vb)
+    return (mid[ok], np.gradient(vb[ok], mid[ok])) if ok.sum() >= 3 else (mid[ok], np.full(ok.sum(), np.nan))
+
+
+def dvdsoc_rmse(res, curves, cond, data_dir):
+    """dV/dSOC RMSE [V per unit SOC] of each real C/20 RPT discharge against the
+    nearest model RPT (pairs > 20 EFC apart skipped). Both curves are normalised
+    to their own depth of discharge, binned and differentiated (smooth_dvdsoc),
+    and compared over DVDSOC_WINDOW."""
+    rows = []
+    for r, e_r, j, e_m in match_rpt_curves(res, curves, cond, data_dir, max_gap=20.0):
+        q_r, v_r = data.load_rpt_discharge(cond, data_dir, r)
+        s_m, v_m = curves[j]["q"] / curves[j]["q"].max(), curves[j]["v"]
+        keep = s_m >= DVDSOC_TRIM
+        x_r, d_r = smooth_dvdsoc(q_r / q_r.max(), v_r)
+        x_m, d_m = smooth_dvdsoc(s_m[keep], v_m[keep])
+        lo, hi = DVDSOC_WINDOW
+        sel = (x_r >= max(lo, x_m.min())) & (x_r <= min(hi, x_m.max()))
+        if sel.sum() >= 5:
+            rows.append((r, e_r, e_m, float(np.sqrt(np.mean((np.interp(x_r[sel], x_m, d_m) - d_r[sel]) ** 2)))))
+    return pd.DataFrame(rows, columns=["rpt", "real_efc", "model_efc", "rmse_dvdsoc"])
+
+
 def lli_lam_table(res, cond, data_dir):
     """Real vs model LLI (particle inventory) and LAM (Gr, Si, PE) at each real RPT."""
     lli = data.load(cond, data_dir, "LLI")
@@ -158,16 +193,12 @@ def crack_table(res):
 
 
 def summary(res, curves, cond, data_dir):
-    """Headline scores for one condition. The knee metrics use the C/3
-    ageing-discharge SoH, which only measures capacity for full windows
-    (a partial window's ageing discharge is the window), so they are NaN for
-    the partial-window cells."""
+    """Headline scores for one condition (the paper's): mean |SoH gap| at the
+    real C/20 RPTs [pp], and the mean C/20 voltage and dV/dSOC RMSEs."""
     gaps = rpt_gaps(res, cond, data_dir)
     vr = voltage_rmse(res, curves, cond, data_dir)
-    kn = knee(res, cond, data_dir)
-    if cond.partial:
-        kn.update(knee_efc=np.nan, soh91_efc=np.nan)
+    dr = dvdsoc_rmse(res, curves, cond, data_dir)
     return dict(condition=cond.key, cell=cond.cell,
                 mean_abs_soh_gap_pp=float(gaps["gap_pp"].abs().mean()),
                 mean_voltage_rmse_V=float(vr["rmse_V"].mean()) if len(vr) else np.nan,
-                knee_efc=kn["knee_efc"], soh91_efc=kn["soh91_efc"], real_knee_efc=kn["real_knee_efc"])
+                mean_dvdsoc_rmse=float(dr["rmse_dvdsoc"].mean()) if len(dr) else np.nan)
