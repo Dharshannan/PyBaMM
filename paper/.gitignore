@@ -7,6 +7,11 @@ __pycache__/
 manuscript/
 manuscript_overleaf/
 outputs_ablations/
+outputs_protocol_fix/
+outputs_resweep/
 
 # copyrighted paper PDFs for checking citations (never commit)
 literature_pdfs/
+
+# local-only expansion comparison (expansion data not released)
+outputs_expansion/

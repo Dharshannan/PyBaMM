@@ -13,6 +13,9 @@ EFC_BASIS_AH = MODEL_CAPACITY_AH
 UPPER_CUTOFF_V = 4.195
 LOWER_CUTOFF_V = 2.5
 RPT_RATE = "C/20"
+# The real RPTs (C/20 charge and discharge) were all run at 25 degC, whatever
+# the cycling temperature [Wan et al. 2025]; formation and RPT steps use this.
+RPT_TEMPERATURE_K = 298.15
 
 
 @dataclass(frozen=True)
@@ -49,12 +52,13 @@ CONDITIONS = {
 def ageing_cycle(cond, rate_basis_ah=RATE_BASIS_AH):
     """One ageing cycle as pybamm experiment steps (C/3 = rate_basis_ah / 3).
     15-95%: voltage-limited both ends. 20-80%: CC-CV to 3.969 V on top and a
-    fixed 1.500 Ah discharge (never updated; 2.5 V safety floor)."""
+    fixed 1.500 Ah discharge (never updated; 2.5 V safety floor). Every charge
+    ends with a CV step to C/50, as in the tests."""
     if cond.key == "25deg_15-95_soc":
-        return ("Discharge at C/3 until 3.14 V", "Charge at C/3 until 4.15 V", "Hold at 4.15 V until 14 mA")
+        return ("Discharge at C/3 until 3.14 V", "Charge at C/3 until 4.15 V", "Hold at 4.15 V until C/50")
     if cond.key == "25deg_20-80_soc":
         seconds = 1.5 / (rate_basis_ah / 3) * 3600
         return (f"Discharge at C/3 for {seconds:.1f} seconds or until 2.5 V",
-                "Charge at C/3 until 3.969 V", "Hold at 3.969 V until 14 mA")
+                "Charge at C/3 until 3.969 V", "Hold at 3.969 V until C/50")
     return (f"Discharge at C/3 until {LOWER_CUTOFF_V} V", f"Charge at C/3 until {UPPER_CUTOFF_V} V",
             f"Hold at {UPPER_CUTOFF_V} V until C/50")

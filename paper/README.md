@@ -22,8 +22,8 @@ parameter set covers four test conditions:
 |---|---|
 | `reproduce_paper.ipynb` | the notebook: settings, simulation or loading, scores, figures |
 | `sigr/conditions.py` | the four conditions and their cycling protocols |
-| `sigr/parameters.py` | model options and the shared parameter set (`V6`) |
-| `sigr/simulate.py` | formation, aligned C/20 RPTs, C/3 ageing, solver retries, result reduction |
+| `sigr/parameters.py` | model options and the shared parameter set (`V7`) |
+| `sigr/simulate.py` | formation, aligned C/20 RPTs (at 25 °C, as in the tests), C/3 ageing, solver retries, result reduction |
 | `sigr/data.py` | experimental-data loading (EFC since each cell's RPT1) |
 | `sigr/analysis.py` | scores: SoH gap, voltage RMSE, knee, LLI/LAM, crack state |
 | `sigr/plots.py` | figures |

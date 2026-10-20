@@ -15,14 +15,14 @@ from concurrent.futures import ProcessPoolExecutor, wait
 
 from . import analysis, data, plots, simulate  # noqa: F401
 from .conditions import CONDITIONS, EFC_BASIS_AH, RATE_BASIS_AH  # noqa: F401
-from .parameters import MODEL_OPTIONS, V6, parameter_values  # noqa: F401
+from .parameters import MODEL_OPTIONS, V7, parameter_values  # noqa: F401
 
 
 def run_condition(key, data_dir, out_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, log=print,
                   options=None, params=None):
     """Simulate one condition (~20-40 min on one core), save <key>_results.npz and
     <key>_rpt_curves.csv to out_dir, and return (results, rpt_curves).
-    options / params override MODEL_OPTIONS / V6 (see ablations.py)."""
+    options / params override MODEL_OPTIONS / V7 (see ablations.py)."""
     cond = CONDITIONS[key]
     res, curves = simulate.run(cond, data_dir, rate_basis_ah, efc_basis_ah, log=log, options=options, params=params)
     analysis.save(res, curves, key, out_dir)

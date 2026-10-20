@@ -1,5 +1,5 @@
 """Fixed-parameter ablations: switch one mechanism off, keep every other
-parameter at its fitted (v6) value, and rerun the affected conditions.
+parameter at its fitted (v7) value, and rerun the affected conditions.
 
     import sigr.ablations as ab
     ab.run_ablations(data_dir, "outputs_ablations")       # all of them, in parallel

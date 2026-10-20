@@ -1,8 +1,10 @@
 # Model equations: porosity-gated isolation LAM and strain-fatigue cracking
 
 The equations below are as implemented in this repository's modified
-PyBaMM (`packages/pybamm/src`). Parameter values are the shared set **v6**
-(`paper/sigr/parameters.py`, `V6`), used for all four conditions.
+PyBaMM (`packages/pybamm/src`). Parameter values are the shared set **v7**
+(`paper/sigr/parameters.py`, `V7`), used for all four conditions. v7 is v6
+refitted on the corrected test protocols (25 °C RPTs, C/20 RPT charge, CV to
+C/50): $k_{V,0}$ ×1.15 and the Paris rate constant ×0.85; nothing else changed.
 
 Code locations:
 
@@ -160,14 +162,14 @@ trade-off.
 
 ### 1.6 Parameters
 
-| Symbol | Parameter (code name) | v6 Si / Gr | Physical meaning | Status |
+| Symbol | Parameter (code name) | v7 Si / Gr | Physical meaning | Status |
 |---|---|---|---|---|
 | $\varepsilon_{\min}$ | `Negative electrode porosity floor` | 0.035 | porosity at which electrolyte transport is cut off | physical in concept; value set by the fit |
 | $\varepsilon_0$ | initial porosity | as built | starting porosity | physical (cell design) |
 | $\eta$ | `porosity-isolation LAM exponent` | 20 / 10 | how abruptly isolation sets in as headroom closes (stand-in for a percolation threshold) | empirical shape factor |
 | $\tau$ | `porosity-isolation gate time constant [s]` | 3.5e8 / 2e8 s | lag between pore closure and isolation | empirical; degenerate with $Y_0$, only $Y_0/\tau$ matters (§1.5) |
 | $Y_0$ | `SEI-redirect-to-LAM yield` | 0.25 / 0.025 | Si volume fraction lost per mole of redirected SEI lithium | lumped, fitted; carries m³/mol implicitly |
-| $E_Y$ | `V6["si_iso_E_Y"]` / `V6["gr_iso_E_Y"]` | 35 / 56.5 kJ/mol | temperature dependence of the yield | fitted |
+| $E_Y$ | `V7["si_iso_E_Y"]` / `V7["gr_iso_E_Y"]` | 35 / 56.5 kJ/mol | temperature dependence of the yield | fitted |
 | $\theta$ | `isolation lithium trapping fraction` | 1.0 (Si) | how full the isolated particles are (1 = isolated at full lithiation) | physical meaning; the fit sits at the bound |
 
 ### 1.7 Physical or semi-empirical?
@@ -220,7 +222,7 @@ k_{\mathrm{iso}}(T) = k_{\mathrm{iso},0}\,\exp\!\left[\frac{E_Y}{R}\left(\frac{1
 k_{\mathrm{iso},0} \equiv \frac{Y_0}{\tau}
 $$
 
-v6: $k_{\mathrm{iso},0} = 0.25 / 3.5\times10^{8}\ \mathrm{s} \approx 7\times10^{-10}$
+v7: $k_{\mathrm{iso},0} = 0.25 / 3.5\times10^{8}\ \mathrm{s} \approx 7\times10^{-10}$
 (m³ mol⁻¹ s⁻¹ implicitly), with $E_Y$ = 35 kJ/mol (Si) unchanged. Two
 identifiable constants ($k_{\mathrm{iso},0}$, $E_Y$) replace three
 ($Y_0$, $\tau$, $E_Y$).
@@ -369,20 +371,20 @@ $$
 
 ### 2.5 Parameters (route B)
 
-| Symbol | Parameter (PyBaMM name / `V6` key) | v6 | Physical meaning | Status |
+| Symbol | Parameter (PyBaMM name / `V7` key) | v7 | Physical meaning | Status |
 |---|---|---|---|---|
-| $k_{V,0}$ | `strain-fatigue cracking constant` / `si_strain_kV` | 2.3e-3 | fractional crack growth per unit contraction log-strain | fitted (CELL009 knee) |
+| $k_{V,0}$ | `strain-fatigue cracking constant` / `si_strain_kV` | 2.645e-3 | fractional crack growth per unit contraction log-strain | fitted (CELL009 knee) |
 | $E_V$ | `si_strain_Ea` | +150 kJ/mol | reduced fatigue of warm Si (more plasticity/creep) | fitted at 45 °C; large |
 | mode | option `"particle cracking growth"` | contraction (B2) | cracks open only while the surface is in tension (delithiation) | physically motivated, same logic as route A's $\sigma_t \ge 0$ |
 | $l(1 - l/R)$ | – | – | self-similar growth ∝ $l$, capped at the particle radius | phenomenological |
 | $n_{\mathrm{BOL}}, n_{\mathrm{end}}$ | `volume change aging-deformation BOL/end exponent` | 1.56 → 2.19 | Si volume vs stoichiometry, steepening with LAM | fitted to expansion data (data-anchored) |
 | $R$ | Si particle radius | – | geometric cap | physical |
 
-Route A parameters (v6):
+Route A parameters (v7):
 
 | Parameter | Value |
 |---|---|
-| $k_{cr,0}$ | 3.9e-20 × 1e3 |
+| $k_{cr,0}$ | 3.9e-20 × 1e3 × 0.85 = 3.315e-17 |
 | $E_{cr}$ | +90 kJ/mol |
 | $m_{cr}$ | 2.2 |
 | $b_{cr}$ | 1.12 |

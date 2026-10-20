@@ -1,8 +1,8 @@
-"""Model options and the shared parameter set ("v6") for all four conditions.
+"""Model options and the shared parameter set ("v7") for all four conditions.
 
 Base set: ``si_gr_expansion`` (in the modified PyBaMM) with CELL064's
 beginning-of-life geometry, composition, OCPs and voltage window on top
-(from its RPT1 C/20 fit). The degradation parameters follow (V6). Only
+(from its RPT1 C/20 fit). The degradation parameters follow (V7). Only
 temperature, F0 and the pore-buffering width differ between conditions
 (conditions.py). The Arrhenius factors are written out exactly as fitted.
 Note the two sign conventions: crack-growth activation energies use
@@ -53,14 +53,17 @@ MODEL_OPTIONS = {
 VAR_PTS = {"x_n": 5, "x_s": 5, "x_p": 5, "r_n_prim": 20, "r_n_sec": 20, "r_n": 20, "r_p": 20}
 
 # ---------------------------------------------------------------------------
-# Shared degradation parameters (v6). Values at T_REF; activation energies
+# Shared degradation parameters (v7). Values at T_REF; activation energies
 # [J/mol] give the temperature dependence.
+# v7 (2026-10-20) = v6 refitted on the corrected test protocols (25 degC RPTs,
+# C/20 RPT charge, CV to C/50): strain-fatigue constant x1.15 (2.3e-3 ->
+# 2.645e-3) and Paris crack-rate constant x0.85 (3.9e-17 -> 3.315e-17).
 # ---------------------------------------------------------------------------
-V6 = dict(
+V7 = dict(
     # Si cracking, route A (Paris law on the diffusion-induced surface stress)
-    si_crack_rate=3.9e-20 * 1.0e3, si_crack_Ea=90000.0,  # positive = slower when hot
+    si_crack_rate=3.9e-20 * 1.0e3 * 0.85, si_crack_Ea=90000.0,  # positive = slower when hot
     # Si cracking, route B (contraction-only strain fatigue)
-    si_strain_kV=2.3e-3, si_strain_Ea=150000.0,  # positive = slower when hot
+    si_strain_kV=2.3e-3 * 1.15, si_strain_Ea=150000.0,  # positive = slower when hot
     # Si stress- and reaction-driven LAM
     si_lam_beta=1.8468e-08, si_lam_Ea=40000.0, si_lam_m=2.5, si_critical_stress=6.0e6,
     si_lam_damping_exponent=0.25, si_reaction_lam_factor=1e-7,
@@ -136,7 +139,7 @@ def base_parameter_values(data_dir):
     return values
 
 
-def parameter_values(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, p=V6):
+def parameter_values(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, p=V7):
     """pybamm.ParameterValues for one condition."""
     T = cond.temperature_K
 

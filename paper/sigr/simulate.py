@@ -3,8 +3,11 @@ placed at each real RPT's EFC (aligned RPTs), collecting compact results
 chunk by chunk.
 
 Protocol:
-- Formation (from 100% SoC): C/20 discharge to 2.5 V, C/3 CC-CV charge to
+- Formation (from 100% SoC): C/20 discharge to 2.5 V, C/20 CC-CV charge to
   4.195 V (CV to C/50). Its discharge is the model's RPT at EFC 0.
+- RPTs: C/20 discharge to 2.5 V, then C/20 CC-CV charge to 4.195 V (CV to
+  C/50). Formation and every RPT step run at 25 degC (RPT_TEMPERATURE_K),
+  as in the tests, whatever the cycling temperature.
 - Partial windows only: a conditioned C/20 reference RPT straight after
   formation (the SoH reference, like the real RPT1). Before every later RPT,
   a 10 min rest and a CC-CV charge to 4.195 V (CC dropped when the window
@@ -20,8 +23,8 @@ import pybamm
 
 from . import data
 from .conditions import (LOWER_CUTOFF_V, MODEL_CAPACITY_AH, RATE_BASIS_AH, EFC_BASIS_AH, RPT_RATE,
-                         UPPER_CUTOFF_V, ageing_cycle)
-from .parameters import MODEL_OPTIONS, V6, VAR_PTS, parameter_values
+                         RPT_TEMPERATURE_K, UPPER_CUTOFF_V, ageing_cycle)
+from .parameters import MODEL_OPTIONS, V7, VAR_PTS, parameter_values
 
 SOLVER_TOL = 1e-6
 RETRY_TOL_MULTIPLIERS = [10.0, 0.1, 100.0, 0.01]
@@ -212,9 +215,9 @@ def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, 
     """Simulate one condition; returns (results, rpt_curves) (see _Collector).
     Each chunk starts from the previous chunk's last state only (which is all
     PyBaMM uses to continue a run), so memory use stays flat over the run.
-    options / params: overrides of MODEL_OPTIONS / V6 (e.g. for ablations)."""
+    options / params: overrides of MODEL_OPTIONS / V7 (e.g. for ablations)."""
     model = pybamm.lithium_ion.DFN({**MODEL_OPTIONS, **(options or {})})
-    param = parameter_values(cond, data_dir, rate_basis_ah, p={**V6, **(params or {})})
+    param = parameter_values(cond, data_dir, rate_basis_ah, p={**V7, **(params or {})})
     solver = pybamm.IDAKLUSolver(root_tol=SOLVER_TOL, atol=SOLVER_TOL, rtol=SOLVER_TOL,
                                  output_variables=OUTPUT_VARIABLES)
 
@@ -241,21 +244,25 @@ def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, 
     def efc_now(state):
         return float(state["Throughput capacity [A.h]"].entries[-1]) / (2 * efc_basis_ah)
 
+    def at_rpt_temperature(steps):
+        return tuple(pybamm.step.string(s, temperature=RPT_TEMPERATURE_K) for s in steps)
+
     age = ageing_cycle(cond, rate_basis_ah)
-    rpt = (f"Discharge at {RPT_RATE} until {LOWER_CUTOFF_V} V", f"Charge at C/3 until {UPPER_CUTOFF_V} V",
+    rpt = (f"Discharge at {RPT_RATE} until {LOWER_CUTOFF_V} V", f"Charge at {RPT_RATE} until {UPPER_CUTOFF_V} V",
            f"Hold at {UPPER_CUTOFF_V} V until C/50")
     if cond.partial:
         top = float(age[2].split("Hold at ")[1].split(" V")[0])
         cc = () if UPPER_CUTOFF_V - top < 0.1 else (f"Charge at C/3 until {UPPER_CUTOFF_V} V",)
         rpt = ("Rest for 10 minutes",) + cc + (f"Hold at {UPPER_CUTOFF_V} V until C/50",) + rpt
     log(f"{cond.label}: ageing cycle: " + " | ".join(age))
-    log(f"{cond.label}: RPT cycle: " + " | ".join(rpt))
+    log(f"{cond.label}: RPT cycle (at {RPT_TEMPERATURE_K - 273.15:.0f} degC): " + " | ".join(rpt))
+    rpt_steps = at_rpt_temperature(rpt)
 
     out = _Collector(cond, efc_basis_ah)
     # Three one-step cycles, so the formation RPT is placed at the end of its discharge.
-    formation = pybamm.Experiment([f"Discharge at {RPT_RATE} until {LOWER_CUTOFF_V} V",
-                                   f"Charge at C/3 until {UPPER_CUTOFF_V} V",
-                                   f"Hold at {UPPER_CUTOFF_V} V until C/50"])
+    formation = pybamm.Experiment(list(at_rpt_temperature([f"Discharge at {RPT_RATE} until {LOWER_CUTOFF_V} V",
+                                                           f"Charge at {RPT_RATE} until {UPPER_CUTOFF_V} V",
+                                                           f"Hold at {UPPER_CUTOFF_V} V until C/50"])))
     sol = make_sim(formation, solver).solve(initial_soc=1.0)
     q = sol.cycles[0]["Discharge capacity [A.h]"].entries
     epc_formation = float(q.max() - q.min()) / MODEL_CAPACITY_AH  # EFC per cycle before any ageing
@@ -263,7 +270,7 @@ def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, 
     state = sol.last_state
     del sol
     if cond.partial:  # conditioned reference RPT (the SoH reference)
-        new = solve_with_retry(pybamm.Experiment([rpt[-3:]]), state, "RPT@ref")
+        new = solve_with_retry(pybamm.Experiment([rpt_steps[-3:]]), state, "RPT@ref")
         if new is not None:
             out.add(new)
             state = new.last_state
@@ -292,7 +299,7 @@ def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, 
                 break
         if stop != "all real RPT EFCs reached":
             break
-        new = solve_with_retry(pybamm.Experiment([rpt]), state, f"RPT@{target:.1f}")
+        new = solve_with_retry(pybamm.Experiment([rpt_steps]), state, f"RPT@{target:.1f}")
         if new is None:
             stop = f"solver failure at RPT EFC {target:.0f}"
             break
