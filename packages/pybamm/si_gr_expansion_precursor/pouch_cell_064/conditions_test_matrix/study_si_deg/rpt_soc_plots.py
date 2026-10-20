@@ -52,15 +52,15 @@ CONFIGS = {
 }
 # Partial-window ageing cycles (model C/3 = Q_nom/3, as for every other run):
 #   CELL009 15-95%: voltage-limited at both ends (C/3 CC-CV to 4.15 V, CV to
-#     14 mA; C/3 CC discharge to 3.14 V).
-#   CELL026 20-80%: CC-CV to 3.969 V (CV to 14 mA) on top; coulomb-counted
+#     C/50 as in the tests (was 14 mA before 2026-10-20); C/3 CC discharge to 3.14 V).
+#   CELL026 20-80%: CC-CV to 3.969 V (CV to C/50) on top; coulomb-counted
 #     1.500 Ah C/3 discharge at the bottom, with the 2.5 V safety floor.
 PARTIAL_AGEING = {
-    "25p1595": ("Discharge at C/3 until 3.14 V", "Charge at C/3 until 4.15 V", "Hold at 4.15 V until 14 mA"),
+    "25p1595": ("Discharge at C/3 until 3.14 V", "Charge at C/3 until 4.15 V", "Hold at 4.15 V until C/50"),
     # Fixed 1.500 Ah at C/3 of the RATE basis (the fork's C64_RATE_BASIS_AH,
     # default 2.5 Ah as in the tests -> 0.833 A for 6480 s); never updated.
     "25p2080": (f"Discharge at C/3 for {1.5 / (float(os.environ.get('C64_RATE_BASIS_AH', 2.5)) / 3) * 3600:.1f} seconds or until 2.5 V",
-                "Charge at C/3 until 3.969 V", "Hold at 3.969 V until 14 mA"),
+                "Charge at C/3 until 3.969 V", "Hold at 3.969 V until C/50"),
 }
 cfg = CONFIGS[T_ARG]
 TAG = cfg.pop("tag") + os.environ.get("RPT_TAG_SUFFIX", "")  # suffix for variant runs

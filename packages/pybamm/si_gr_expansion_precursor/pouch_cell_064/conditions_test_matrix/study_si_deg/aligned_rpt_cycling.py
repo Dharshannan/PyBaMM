@@ -24,6 +24,7 @@ The formation discharge (C/20) is the RPT at EFC 0, as in the fork.
 Use: import after the fork and call run_degradation_aligned(m, targets).
 rpt_soc_plots.py --aligned does this with the per-temperature real RPT EFCs.
 """
+import os
 import numpy as np
 import pybamm
 
@@ -68,9 +69,23 @@ def run_degradation_aligned(m, targets, ageing_cycle=None):
         f"Hold at {m.UPPER_CUTOFF_V} V until C/50",
     )
     print("Ageing cycle:", " | ".join(ageing_cycle), flush=True)
+    # Test protocol (Wan et al. 2025), fixed 2026-10-20: every RPT is a C/20
+    # discharge AND a C/20 CC-CV recharge, run at 25 degC whatever the
+    # cycling temperature. C64_RPT_TEMPERATURE_K / C64_RPT_CHARGE_RATE
+    # restore the old behaviour (cycling temperature, C/3 recharge) if set
+    # to 'cycling' / 'C/3'.
+    rpt_T = os.environ.get("C64_RPT_TEMPERATURE_K", "298.15")
+    rpt_T = None if rpt_T == "cycling" else float(rpt_T)
+    rpt_charge = os.environ.get("C64_RPT_CHARGE_RATE", m.RPT_RATE)
+
+    def at_rpt_temperature(steps):
+        if rpt_T is None:
+            return tuple(steps)
+        return tuple(pybamm.step.string(s, temperature=rpt_T) for s in steps)
+
     rpt_cycle = (
         f"Discharge at {m.RPT_RATE} until {m.LOWER_CUTOFF_V} V",
-        f"Charge at C/3 until {m.UPPER_CUTOFF_V} V",
+        f"Charge at {rpt_charge} until {m.UPPER_CUTOFF_V} V",
         f"Hold at {m.UPPER_CUTOFF_V} V until C/50",
     )
     if partial:
@@ -87,7 +102,8 @@ def run_degradation_aligned(m, targets, ageing_cycle=None):
         tops = [float(st.split("Hold at ")[1].split(" V")[0]) for st in ageing_cycle if st.startswith("Hold at ")]
         cc = () if tops and m.UPPER_CUTOFF_V - tops[0] < 0.1 else (f"Charge at C/3 until {m.UPPER_CUTOFF_V} V",)
         rpt_cycle = ("Rest for 10 minutes",) + cc + (f"Hold at {m.UPPER_CUTOFF_V} V until C/50",) + rpt_cycle
-    print("RPT cycle:", " | ".join(rpt_cycle), flush=True)
+    print(f"RPT cycle (at {rpt_T if rpt_T else 'cycling'} K):", " | ".join(rpt_cycle), flush=True)
+    rpt_steps = at_rpt_temperature(rpt_cycle)
 
     def solve_with_retry(experiment, last_sol, label):
         last_exc = None
@@ -121,7 +137,11 @@ def run_degradation_aligned(m, targets, ageing_cycle=None):
         q = sol.cycles[0]["Discharge capacity [A.h]"].entries
         return float(q.max() - q.min()) / m.NOMINAL_CAP_AH
 
-    last_sol = make_sim(m.formation_exp, m.solver).solve(initial_soc=1.0)
+    formation = pybamm.Experiment(list(at_rpt_temperature([
+        f"Discharge at {m.RPT_RATE} until {m.LOWER_CUTOFF_V} V",
+        f"Charge at {rpt_charge} until {m.UPPER_CUTOFF_V} V",
+        f"Hold at {m.UPPER_CUTOFF_V} V until C/50"])))
+    last_sol = make_sim(formation, m.solver).solve(initial_soc=1.0)
     print("Formation cycle solved (RPT at EFC 0).", flush=True)
     if partial:
         # Conditioned reference RPT: formation ends fully CC-CV charged, so a
@@ -129,10 +149,7 @@ def run_degradation_aligned(m, targets, ageing_cycle=None):
         # same way as every later RPT (and as the real RPT1). It becomes the
         # SoH reference (m.RPT_SOH_REF_INDEX = 1); the formation discharge
         # from initial_soc=1.0 sits ~1.7% higher.
-        ref_cycle = (f"Discharge at {m.RPT_RATE} until {m.LOWER_CUTOFF_V} V",
-                     f"Charge at C/3 until {m.UPPER_CUTOFF_V} V",
-                     f"Hold at {m.UPPER_CUTOFF_V} V until C/50")
-        new = solve_with_retry(pybamm.Experiment([ref_cycle]), last_sol, "RPT@ref")
+        new = solve_with_retry(pybamm.Experiment([rpt_steps[-3:]]), last_sol, "RPT@ref")
         if new is not None:
             last_sol = new
             m.RPT_SOH_REF_INDEX = 1
@@ -167,7 +184,7 @@ def run_degradation_aligned(m, targets, ageing_cycle=None):
         if stop_reason != "all real RPT EFCs reached":
             break
         start = efc_now(last_sol)
-        new = solve_with_retry(pybamm.Experiment([rpt_cycle]), last_sol, f"RPT@{target:.1f}")
+        new = solve_with_retry(pybamm.Experiment([rpt_steps]), last_sol, f"RPT@{target:.1f}")
         if new is None:
             stop_reason = f"solver_failure_at_rpt_efc_{target:.0f}"
             break

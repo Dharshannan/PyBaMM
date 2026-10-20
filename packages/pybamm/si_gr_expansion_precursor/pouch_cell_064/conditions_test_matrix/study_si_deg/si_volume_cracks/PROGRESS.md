@@ -358,3 +358,31 @@ OLD 2.5947 Ah current/EFC basis (as v2). Identical to v2 within 0.1pp:
 | `final_plots_v2` | lagged | old |
 | `final_plots_v3` | dose | fixed |
 | `final_plots_v4` | dose | old |
+
+## Corrected test protocols and shared set v7 (2026-10-20)
+
+Three model-test protocol mismatches, found while drafting the paper (checked
+against Wan et al. 2025), are fixed in `aligned_rpt_cycling.py` and
+`rpt_soc_plots.py` (now the defaults):
+
+- **RPTs and formation at 25 °C** whatever the cycling temperature (the real
+  RPTs were all at 25 °C). Done with per-step temperatures
+  (`pybamm.step.string(..., temperature=...)`); `C64_RPT_TEMPERATURE_K=cycling`
+  restores the old behaviour.
+- **C/20 RPT recharge** (was C/3); `C64_RPT_CHARGE_RATE=C/3` restores it.
+- **Every CV to C/50** (the partial-window CV used to stop at 14 mA).
+
+v6 on the corrected protocols: 4.42 / 1.05 / 5.05 / 4.62 pp (25 °C full, 45 °C,
+15–95 %, 20–80 %). Three refit rounds (paper branch, `paper/outputs_resweep/`)
+gave **v7 = v6 + k_V ×1.15 + Paris ×0.85** (`stage3_v7.env`):
+**3.40 / 0.88 / 2.80 / 6.31 pp**, mean of the three fitted cells 2.36 pp (v6 on
+the old protocols: 2.49). The 25 °C expansion peak stays on time (EFC ~109,
+measured plateau 100–120); Paris ×0.7 fits SoH better (1.65 pp) but puts that
+knee 15–20 EFC late. Lessons: the early LLI burst (~+3 pp by 50 EFC) is
+crack-face SEI from early Paris cracking plus cathode-LAM trapping, not fixed by
+initial SEI thickness or SEI rate; k_V trades the 15–95 % knee against the
+20–80 % one (Miner-linear strain law).
+
+Known approximation: the isolation and cathode-LAM Arrhenius factors are
+constants at the cycling temperature, so they keep their 45 °C values during
+CELL017's 25 °C RPTs.
