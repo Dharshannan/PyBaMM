@@ -109,8 +109,11 @@ def figure(data_dir, out_dir, baseline_dir, keys=None):
         cond = CONDITIONS[key]
         ax_s, ax_l = axes[0, c], axes[1, c]
         cap = data.load(cond, data_dir, "capacity_fade")
-        c20 = cap[cap["source"] == "C/20 RPT"]
+        c20, sub = cap[cap["source"] == "C/20 RPT"], cap[cap["source"] != "C/20 RPT"]
         ax_s.scatter(c20["efc"], c20["capacity_retention_pct"], s=40, color="black", label="Experiment", zorder=6)
+        if len(sub):
+            ax_s.scatter(sub["efc"], sub["capacity_retention_pct"], s=40, facecolors="none", edgecolors="black",
+                         linewidths=1.4, label="Experiment (high-rate substitute)", zorder=6)
         lam = data.load(cond, data_dir, "LAM_derived")
         ax_l.scatter(lam["efc"], lam["LAM_NE_silicon_pct"], s=40, color="black", marker="s", label="Experiment",
                      zorder=6)
