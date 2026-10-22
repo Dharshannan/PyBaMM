@@ -66,8 +66,8 @@ def rpt_voltage(ax, res, curves, cond, data_dir):
         q, v = data.load_rpt_discharge(cond, data_dir, r)
         ax.plot(q, v, color=cmap(norm(e_r)), ls="--", lw=1.0)
     ax.legend(handles=[Line2D([], [], color="0.3", label="Model"), Line2D([], [], color="0.3", ls="--", label="Measured")],
-              loc="lower left", bbox_to_anchor=(0.0, 0.27))
-    cax = ax.inset_axes([0.06, 0.11, 0.42, 0.045])
+              loc="upper right")
+    cax = ax.inset_axes([0.50, 0.735, 0.42, 0.045])  # just under the legend, top right (no curves there)
     cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax, orientation="horizontal")
     cb.set_label("EFC since RPT1", fontsize=7, labelpad=1)
     cb.ax.xaxis.set_label_position("top")
