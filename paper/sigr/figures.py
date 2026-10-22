@@ -157,7 +157,7 @@ def schematic_mech1(results_dir, key="25deg_15-95_soc"):
     a2.plot(an.efc(res, res["thr"])[m], res["LAM_si"][m] / 100, color=C_ISO, lw=1.5, label="Si LAM (fraction)")
     a2.set_xlabel(plots.EFC_LABEL)
     a2.set_ylabel("Normalised value [-]")
-    a2.legend(loc="center left")
+    a2.legend(loc="lower left", bbox_to_anchor=(0.0, 0.07))
     style.panel_label(a2, 2)
 
     a3 = sf[1, 1].subplots()
