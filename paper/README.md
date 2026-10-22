@@ -26,9 +26,13 @@ parameter set covers four test conditions:
 | `sigr/simulate.py` | formation, aligned C/20 RPTs (at 25 °C, as in the tests), C/3 ageing, solver retries, result reduction |
 | `sigr/data.py` | experimental-data loading (EFC since each cell's RPT1) |
 | `sigr/analysis.py` | scores: SoH gap, voltage RMSE, knee, LLI/LAM, crack state |
-| `sigr/plots.py` | figures |
+| `sigr/plots.py` | per-condition figures (overall summary, C/20 RPT voltage and dV/dSoC, crack diagnostics) |
+| `sigr/figures.py` | the paper's other figures (data overview, mechanism schematics, partial-window Discussion figure) and `make_all` |
+| `sigr/style.py` | JES figure style: printed size (3.25 in / 6.75 in), 8 pt Arial, nothing below 7 pt, lettered panels |
 | `sigr/ablations.py` | fixed-parameter ablations (one mechanism off), their comparison table and figure |
 | `tools/run_condition.py` | command-line run of one condition |
+| `tools/make_paper_figures.py` | writes every paper figure to `paper_pics/` |
+| `paper_pics/` | the paper's figures (PNG, 300 dpi, and PDF) at their printed size |
 | `tools/build_data_bundle.py` | assembles `data/` from the authors' working files (author use; not runnable from this repository) |
 | `results/` | the paper's precomputed model results (loaded when `RUN_SIMULATIONS = False`) |
 | `environment.yml` | pinned environment |
@@ -91,6 +95,15 @@ import sigr.ablations as ab
 ab.run_ablations("data", "outputs_ablations")
 ab.compare("data", "outputs_ablations", "results")          # table vs the full model
 ab.figure("data", "outputs_ablations", "results").savefig("ablations.png")
+```
+
+**Paper figures.** Every figure is drawn at its printed size for the
+Journal of The Electrochemical Society (one column 3.25 in, two columns
+6.75 in; 8 pt text, at least 7 pt; panels lettered a), b), ... in place of
+titles), and written as PNG (300 dpi) and PDF:
+
+```bash
+python tools/make_paper_figures.py --results results --ablations outputs_ablations
 ```
 
 ## Reproducibility

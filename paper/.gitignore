@@ -16,3 +16,6 @@ literature_pdfs/
 
 # local-only expansion comparison (expansion data not released)
 outputs_expansion/
+# the paper figures are kept (the repository ignores *.png / *.pdf elsewhere)
+!paper_pics/*.png
+!paper_pics/*.pdf
