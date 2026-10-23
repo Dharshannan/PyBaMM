@@ -32,6 +32,7 @@ parameter set covers four test conditions:
 | `sigr/ablations.py` | fixed-parameter ablations (one mechanism off), their comparison table and figure |
 | `tools/run_condition.py` | command-line run of one condition |
 | `tools/make_paper_figures.py` | writes every paper figure to `paper_pics/` |
+| `dma/` | composite DMA of the C/20 RPTs with PyProBE (voltage + dV/dQ), the comparison with the given DMA, and the LAM/LLI tables |
 | `paper_pics/` | the paper's figures (PNG, 300 dpi, and PDF) at their printed size |
 | `tools/build_data_bundle.py` | assembles `data/` from the authors' working files (author use; not runnable from this repository) |
 | `results/` | the paper's precomputed model results (loaded when `RUN_SIMULATIONS = False`) |
@@ -62,6 +63,11 @@ Download the data record (Zenodo DOI: *to be added*) and unpack it here:
 - `data/`: per cell, the capacity fade, LLI and LAM, plus the C/20 RPT
   discharge curves. Also the
   beginning-of-life OCPs (`data/ocp/`). EFC = throughput / (2 × 2.5 Ah).
+  The LLI and LAM come from our own composite DMA of the C/20 discharges,
+  fitted to voltage and dV/dQ only with PyProBE (`dma/`: `run_dma.py` fits and
+  compares with the DMA we were given, `tables.py` writes the tables; separate
+  environment `dma/environment.yml`). The fitted parameters are in
+  `dma/results/dma_new.csv`.
 The paper's precomputed model results are in `results/`
 (`<condition>_results.npz`, `<condition>_rpt_curves.csv`); new runs go to
 `outputs/`.

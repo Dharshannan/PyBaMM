@@ -12,13 +12,15 @@ import argparse
 import glob
 import os
 import shutil
+import sys
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 STUDY = os.path.join(REPO, "packages", "pybamm", "si_gr_expansion_precursor", "pouch_cell_064")
 EXP = os.path.join(STUDY, "degradation_test_matrix", "experimental_data")
 OCP = os.path.join(STUDY, "parameters", "data")
 POUCH_DATA = "C:/Shannan_PhD_Stuff_Local/Si_Gr_Expansion_Precursor/Pouch_Data"
-TABLES = ("capacity_fade", "LLI", "LAM_derived")  # no expansion data in the paper release
+TABLES = ("capacity_fade",)  # no expansion data in the paper release
+# LAM and LLI come from our own composite DMA (voltage + dV/dQ, no expansion): paper/dma
 PACKAGE = "C:/Users/ds3420/Downloads/IC_PYBAMM_FIG1_DATA_PACKAGE_v1_20260927/IC_PYBAMM_FIG1_DATA_PACKAGE_v1_20260927"
 # Half-cell OCPs on discharge: NMC622 lithiating ("sto" in the file is 1 - y), graphite and Si delithiating.
 HALF_CELL_OCPS = {"NMC622_OCP_Lithiation.xlsx": "nmc622_lithiation.csv",
@@ -78,6 +80,10 @@ def main():
             copy(f, os.path.join(a.dest, folder, "low_rate_c20"))
 
     dma_inputs(a.package, a.dest)
+    sys.path.insert(0, os.path.join(REPO, "paper", "dma"))
+    import tables  # noqa: E402
+
+    tables.write_tables(os.path.join(REPO, "paper", "dma", "results", "dma_new.csv"), a.dest)
     n = sum(len(files) for _, _, files in os.walk(a.dest))
     print(f"{n} files in {a.dest}")
 
