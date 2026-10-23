@@ -1,0 +1,11 @@
+# Environment for the composite DMA (separate from the model environment: PyProBE pins its own stack).
+#   conda env create -f environment.yml && conda activate sigr-dma
+name: sigr-dma
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      - "PyProBE-Data @ git+https://github.com/ImperialCollegeLondon/PyProBE.git"  # 2.6.1 at the time of the fits
+      - openpyxl

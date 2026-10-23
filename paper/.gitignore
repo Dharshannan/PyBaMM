@@ -19,3 +19,6 @@ outputs_expansion/
 # the paper figures are kept (the repository ignores *.png / *.pdf elsewhere)
 !paper_pics/*.png
 !paper_pics/*.pdf
+dma/results/
+dma/results_run.log
+dma/__pycache__/
