@@ -39,6 +39,21 @@ def copy(src, dst_dir):
     shutil.copy2(src, dst_dir)
 
 
+def strip_expansion(dest):
+    """Drop every expansion column (measured, and the given fit's modelled expansion)
+    from the C/20 discharge CSVs: no expansion data in the release."""
+    import pandas as pd
+
+    n = 0
+    for f in sorted(glob.glob(os.path.join(dest, "*", "low_rate_c20", "*.csv"))):
+        d = pd.read_csv(f)
+        drop = [c for c in d.columns if "expansion" in c.lower()]
+        if drop:
+            d.drop(columns=drop).to_csv(f, index=False)
+            n += 1
+    print(f"expansion columns removed from {n} C/20 discharge files")
+
+
 def dma_inputs(package, dest):
     """Half-cell OCPs (CSV) and the base DMA table (low-rate C/20 fits only) of each cell."""
     import pandas as pd
@@ -79,6 +94,7 @@ def main():
         for f in sorted(glob.glob(os.path.join(EXP, folder, "low_rate_c20", "*_discharge.csv"))):
             copy(f, os.path.join(a.dest, folder, "low_rate_c20"))
 
+    strip_expansion(a.dest)
     dma_inputs(a.package, a.dest)
     sys.path.insert(0, os.path.join(REPO, "paper", "dma"))
     import tables  # noqa: E402
