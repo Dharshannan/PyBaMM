@@ -156,6 +156,49 @@ def plot_examples(t, curves, picks=(("CELL064", 1), ("CELL064", 5), ("CELL009", 
     return st.save(fig, OUT, "bench_examples")[0]
 
 
+def plot_cell_fits(t, curves, cell):
+    """Every RPT of one cell: voltage (upper panel) and dV/dQ (lower panel), measured and the four
+    fits, with each fit's voltage RMSE; four RPTs per block of two rows."""
+    st = R._style()
+    hc = C.HalfCells(DATA)
+    rpts = sorted(t["old_def"].loc[t["old_def"]["cell"] == cell, "rpt"].astype(int))
+    ncol = 4
+    nblk = int(np.ceil(len(rpts) / ncol))
+    fig, ax = plt.subplots(2 * nblk, ncol, figsize=(st.DOUBLE_IN, 2.7 * nblk + 0.5), layout="constrained",
+                           squeeze=False)
+    k = 0
+    for n, rpt in enumerate(rpts):
+        av, ad = ax[2 * (n // ncol), n % ncol], ax[2 * (n // ncol) + 1, n % ncol]
+        q, v, dvdq, _, _ = C.load_discharge(C.rpt_files(DATA, cell)[rpt])
+        av.plot(q, v, color="k", lw=1.6)
+        ad.plot(q, dvdq, color="k", lw=1.6)
+        rm = []
+        for var, (_, sty) in VARIANTS.items():
+            r = t[var][(t[var]["cell"] == cell) & (t[var]["rpt"] == rpt)].iloc[0]
+            vm = model_voltage(var, r, q, hc, curves)
+            line = {kk: vv for kk, vv in sty.items() if kk not in ("marker", "ms", "mfc")}
+            av.plot(q, vm, lw=1.0, **line)
+            ad.plot(q, np.gradient(vm, q), lw=1.0, **line)
+            rm.append(f"{1e3 * np.sqrt(np.nanmean((vm - v) ** 2)):.1f}")
+        ad.set_ylim(np.percentile(dvdq, 2) - 0.3, max(0.05, dvdq.max() + 0.1))
+        av.text(0.03, 0.04, "RMSE [mV]\n" + " / ".join(rm), transform=av.transAxes, ha="left", va="bottom",
+                fontsize=7)
+        st.panel_label(av, k, f"RPT{rpt}")
+        st.panel_label(ad, k + 1)
+        k += 2
+        ad.set_xlabel("Discharge capacity [A h]")
+    for a in ax.flat:
+        if not a.lines:
+            a.set_visible(False)
+    for b_ in range(nblk):
+        ax[2 * b_, 0].set_ylabel("Voltage [V]")
+        ax[2 * b_ + 1, 0].set_ylabel("dV/dQ [V/A h]")
+    fig.legend(handles=[Line2D([], [], color="k", lw=1.6, label="Measured")]
+               + [Line2D([], [], label=lab, **{kk: vv for kk, vv in sty.items() if kk not in ("marker", "ms", "mfc")})
+                  for lab, sty in VARIANTS.values()], loc="outside upper center", ncol=3, frameon=False)
+    return st.save(fig, OUT, f"bench_fits_{cell}")[0]
+
+
 def plot_window(t, curves, cell="CELL064", rpt=5):
     """The OCV window of each fit against SoC: pyprobe-dma's OCV runs from V_min to V_max by
     construction; the old fits' OCV at the ends of the measured discharge is left free."""
@@ -241,7 +284,8 @@ def main():
     s.to_csv(os.path.join(OUT, "bench_scores.csv"), index=False)
     m = modes(t)
     m.to_csv(os.path.join(OUT, "bench_modes.csv"), index=False)
-    for f in (plot_modes(m), plot_rmse(s), plot_examples(t, curves), plot_window(t, curves), plot_deformation(t)):
+    figs = [plot_modes(m), plot_rmse(s), plot_examples(t, curves), plot_window(t, curves), plot_deformation(t)]
+    for f in figs + [plot_cell_fits(t, curves, cell) for cell in C.FOLDERS]:
         print(f)
     latex_table(t, s, m)
     pd.set_option("display.width", 200)
