@@ -27,15 +27,20 @@ OUT = os.path.join(HERE, "..", "results", "benchmark")
 VARIANTS = {  # label, style
     "old_def": ("PyProBE 2.6.1, Si OCP deformed", dict(color="tab:blue", ls="-", marker="o", ms=3.6)),
     "old_nodef": ("PyProBE 2.6.1, Si OCP fixed", dict(color="tab:blue", ls="--", marker="o", ms=3.6, mfc="white")),
-    "new_def": ("pyprobe-dma, Si OCP deformed", dict(color="tab:orange", ls="-", marker="s", ms=3.4)),
-    "new_nodef": ("pyprobe-dma, Si OCP fixed", dict(color="tab:orange", ls="--", marker="s", ms=3.4, mfc="white")),
+    "new_def": ("pyprobe-dma (trimmed), Si OCP deformed", dict(color="tab:orange", ls="-", marker="s", ms=3.4)),
+    "new_nodef": ("pyprobe-dma (trimmed), Si OCP fixed", dict(color="tab:orange", ls="--", marker="s", ms=3.4, mfc="white")),
+}
+EXTRA = {  # pyprobe-dma on the full discharge (table only)
+    "new_def_full": ("pyprobe-dma (full curve), Si OCP deformed", dict(color="tab:red", ls="-")),
+    "new_nodef_full": ("pyprobe-dma (full curve), Si OCP fixed", dict(color="tab:red", ls="--")),
 }
 LIMITS = (2.5, 4.2)
 
 
 def load():
-    t = {k: pd.read_csv(os.path.join(OUT, f"{k}.csv")) for k in (*VARIANTS, "new_nodef_notails")}
-    curves = {k: dict(np.load(os.path.join(OUT, f"{k}_curves.npz"))) for k in ("new_def", "new_nodef")}
+    t = {k: pd.read_csv(os.path.join(OUT, f"{k}.csv"))
+         for k in (*VARIANTS, *EXTRA, "new_nodef_notails", "new_nodef_notails_full")}
+    curves = {k: dict(np.load(os.path.join(OUT, f"{k}_curves.npz"))) for k in ("new_def", "new_nodef", *EXTRA)}
     return t, curves
 
 
@@ -55,7 +60,7 @@ def scores(t, curves):
     """Voltage and dV/dQ RMSE of every variant on the common window (the paper DMA's 300 points)."""
     hc = C.HalfCells(DATA)
     rows = []
-    for k in VARIANTS:
+    for k in (*VARIANTS, *EXTRA):
         for _, r in t[k].iterrows():
             q, v, dvdq, _, _ = C.load_discharge(C.rpt_files(DATA, r["cell"])[int(r["rpt"])])
             vm = model_voltage(k, r, q, hc, curves)
@@ -68,7 +73,7 @@ def scores(t, curves):
 def modes(t):
     out = []
     base = R.base_tables(DATA)
-    for k in VARIANTS:
+    for k in (*VARIANTS, *EXTRA):
         for cell in C.FOLDERS:
             b = base[cell]
             efc0 = float(b.loc[b["rpt"] == 1, "EFC"].iloc[0])
@@ -99,7 +104,7 @@ def plot_modes(m):
             st.panel_label(ax[j], n)
             n += 1
     fig.legend(handles=[Line2D([], [], label=lab, **sty) for lab, sty in VARIANTS.values()],
-               loc="outside upper center", ncol=4, frameon=False)
+               loc="outside upper center", ncol=2, frameon=False)
     return st.save(fig, OUT, "bench_modes")[0]
 
 
@@ -120,7 +125,7 @@ def plot_rmse(s):
     for i, a in enumerate(ax):
         st.panel_label(a, i)
     fig.legend(handles=[Line2D([], [], label=lab, **sty) for lab, sty in VARIANTS.values()],
-               loc="outside upper center", ncol=4, frameon=False)
+               loc="outside upper center", ncol=2, frameon=False)
     return st.save(fig, OUT, "bench_rmse")[0]
 
 
@@ -209,10 +214,12 @@ def latex_table(t, s, m):
     setting (PyProBE 2.6.1 with deformation) in LLI and Si LAM."""
     ref = m[m["variant"] == "old_def"].set_index(["cell", "rpt"])
     lines = []
-    nt = t["new_nodef_notails"]
-    lines.append(r"pyprobe-dma, half-cell OCPs as measured & " + f"{np.isfinite(nt['cost']).sum()} / {len(nt)}"
-                 + r" & -- & -- & -- & -- \\")
-    for k, (lab, _) in VARIANTS.items():
+    for key, lab in (("new_nodef_notails", "pyprobe-dma (trimmed), OCPs as measured"),
+                     ("new_nodef_notails_full", "pyprobe-dma (full curve), OCPs as measured")):
+        nt = t[key]
+        lines.append(lab + f" & {np.isfinite(nt['cost']).sum()} / {len(nt)}" + r" & -- & -- & -- & -- \\")
+    lines.append(r"\midrule")
+    for k, (lab, _) in {**VARIANTS, **EXTRA}.items():
         ok = np.isfinite(t[k]["cost"]).sum() if "cost" in t[k] else len(t[k])
         sk = s[s["variant"] == k]
         mk = m[m["variant"] == k].set_index(["cell", "rpt"])

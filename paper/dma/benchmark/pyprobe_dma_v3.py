@@ -87,10 +87,18 @@ class HalfCells:
                             resistance_model=dma.ResistanceModel.from_template(template="constant"))
 
 
-def curves(path):
-    """Voltage and current curves on the net-capacity axis (decreasing on discharge), full discharge."""
-    d = pd.read_csv(path, usecols=["Q_discharge_Ah", "voltage_fit_used_V", "current_A"])
+TRIM = True  # fit the discharge without its last 5 % of capacity, as the paper's DMA does
+
+
+def curves(path, trim=None):
+    """Voltage and current curves on the net-capacity axis (decreasing on discharge). trim (default
+    TRIM): only the paper DMA's objective window, i.e. the discharge without its last 5 % of
+    capacity; the model's SoC window stays pinned to the voltage limits either way."""
+    trim = TRIM if trim is None else trim
+    d = pd.read_csv(path, usecols=["Q_discharge_Ah", "voltage_fit_used_V", "current_A", "fit_objective_included"])
     d = d.sort_values("Q_discharge_Ah").drop_duplicates("Q_discharge_Ah")
+    if trim:
+        d = d[d["fit_objective_included"].astype(bool)]
     q = d["Q_discharge_Ah"].to_numpy()
     q_grid = np.linspace(q.min(), q.max(), 1500)
     t = Table(lf=pl.DataFrame({"Net Capacity / Ah": -q_grid[::-1],
@@ -107,6 +115,9 @@ def cost_function():
 
 def constraints():
     return [dma.Constraint("ne_capacity", lo=0.5, hi=4.0),  # aged cells exceed the default 1.2 x cell capacity
+            # A bound on pe_capacity (a derived quantity, sent as a nonlinear constraint) would match
+            # ../composite_dma.py, but pyprobe-dma 0.1.0 then calls the resistance model without its
+            # parameter and fails; the best of several seeds (fit_best) avoids the wrong basin instead.
             dma.Constraint("r_params", lo=[0.0], hi=[0.3])]
 
 
@@ -114,6 +125,14 @@ def fit(hc, vc, ic, scale=1.0, shift=0.0, seed=0, maxiter=300):
     return dma.run_ocv_curve_fit(voltage_curve=vc, current_curve=ic, ocv_model=hc.ocv_model(scale, shift),
                                  cost_function=cost_function(), constraints=constraints(),
                                  optimizer_options={"seed": seed, "maxiter": maxiter, "popsize": 20, "tol": 1e-8})
+
+
+SEEDS = (0, 1, 2, 3)
+
+
+def fit_best(hc, vc, ic, scale=1.0, shift=0.0):
+    """Lowest-cost fit over SEEDS (as ../composite_dma.py, which keeps the best of three seeds)."""
+    return min((fit(hc, vc, ic, scale, shift, seed=k) for k in SEEDS), key=lambda r: r.optimization_result.fun)
 
 
 def summarise(res, cell, rpt, scale, shift):
@@ -174,7 +193,7 @@ def fit_rpt(data_dir, cell, rpt, deform, tails=True):
     hc = HalfCells(data_dir, tails=tails)
     vc, ic = curves(C.rpt_files(data_dir, cell)[rpt])
     if not deform:
-        res = fit(hc, vc, ic)
+        res = fit_best(hc, vc, ic)
         return summarise(res, cell, rpt, 1.0, 0.0), fit_curve(res)
     memo = {}
 
@@ -190,7 +209,8 @@ def fit_rpt(data_dir, cell, rpt, deform, tails=True):
                           options={"maxfev": 25, "xatol": 2e-3, "fatol": 1e-4,
                                    "initial_simplex": [start, (start[0] + 0.03, start[1]), (start[0], start[1] + 0.015)]})
     best = min(memo, key=lambda k: memo[k].optimization_result.fun)
-    return summarise(memo[best], cell, rpt, *best), fit_curve(memo[best])
+    res = fit_best(hc, vc, ic, *best)  # the search used one seed; the chosen deformation gets them all
+    return summarise(res, cell, rpt, *best), fit_curve(res)
 
 
 def run_all(data_dir, out_dir, jobs=12):
