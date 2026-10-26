@@ -1,0 +1,14 @@
+# Environment for the pyprobe-dma benchmark (separate from ../environment.yml: pyprobe-dma pins the
+# PyProBE "version-3-updates-for-bdf" branch, which would replace PyProBE 2.6.1).
+#   conda env create -f environment-v3.yml && conda activate sigr-dma3
+name: sigr-dma3
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      - "pyprobe-dma @ git+https://github.com/ImperialCollegeLondon/pyprobe-dma.git@218f88d"
+      # the batterydf commit pinned in pyprobe-dma's uv.lock (a newer one lacks bdf.spec)
+      - "batterydf @ git+https://github.com/battery-data-alliance/battery-data-format.git@8537c592679b3e4ccdb1a40fea656f4d1b6d1ac3"
+      - openpyxl

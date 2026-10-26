@@ -24,3 +24,4 @@ dma/results/*
 !dma/results/dma_new.csv
 dma/results_run.log
 dma/__pycache__/
+dma/benchmark/*.log

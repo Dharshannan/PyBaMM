@@ -133,21 +133,28 @@ def cost(theta, hc, q, v, dvdq):
     return j if np.isfinite(j) else 1e12
 
 
-def fit_rpt(data_dir, cell, rpt, base_theta=None, seeds=(0, 1, 2), maxiter=400, popsize=20):
+def fit_rpt(data_dir, cell, rpt, base_theta=None, seeds=(0, 1, 2), maxiter=400, popsize=20, deform=True):
     """Differential evolution (+ L-BFGS-B polish) from several seeds; the base
     solution, when given, is one member of the first seeds' initial population.
+    deform=False fixes the Si OCP undeformed (scale 1, shift 0) and fits the other five.
     Returns a dict: parameters, LLI, RMSEs and cost of the best run."""
     hc = HalfCells(data_dir)
     q, v, dvdq, q_full, _ = load_discharge(rpt_files(data_dir, cell)[rpt])
+    n = len(PARAMS) if deform else len(PARAMS) - 2
+    fixed = [] if deform else [1.0, 0.0]
+
+    def obj(t, *args):
+        return cost(np.r_[t, fixed], *args)
+
     best = None
     for k, seed in enumerate(seeds):
-        x0 = None if base_theta is None or k == len(seeds) - 1 else np.clip(base_theta, *np.array(BOUNDS).T)
-        r = optimize.differential_evolution(cost, BOUNDS, args=(hc, q, v, dvdq), seed=seed, x0=x0,
+        x0 = None if base_theta is None or k == len(seeds) - 1 else np.clip(base_theta[:n], *np.array(BOUNDS[:n]).T)
+        r = optimize.differential_evolution(obj, BOUNDS[:n], args=(hc, q, v, dvdq), seed=seed, x0=x0,
                                             popsize=popsize, maxiter=maxiter, tol=1e-8, init="sobol",
                                             polish=True, updating="deferred", workers=1)
         if best is None or r.fun < best.fun:
             best = r
-    theta = best.x
+    theta = np.r_[best.x, fixed]
     rv, rd = residuals(hc, theta, q, v, dvdq)
     out = dict(zip(PARAMS, theta))
     out.update(cell=cell, rpt=rpt, cost=float(best.fun), rmse_voltage_V=float(np.sqrt(np.mean(rv ** 2))),
