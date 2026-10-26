@@ -1,7 +1,12 @@
-"""Write the measured LAM and LLI tables the paper code reads (sigr.data) from the
-new composite DMA (results/dma_new.csv: voltage + dV/dQ fits, no expansion).
+"""Write the measured LAM and LLI tables the paper code reads (sigr.data) from an
+expansion-free composite DMA.
 
-    python tables.py [--fits results/dma_new.csv] [--data ../data]
+    python tables.py [--source collaborators|new] [--data ../data]
+
+source "collaborators" (the paper's choice): the collaborators' discharge fits
+(voltage-based, no expansion in the objective), kept in the data bundle as
+<data>/dma_collaborators_discharge.csv. source "new": our PyProBE refit,
+results/dma_new.csv (the cross-check).
 
 <folder>/<CELL>_LAM_derived.csv and <folder>/<CELL>_LLI.csv keep their columns;
 LAM and LLI are relative to RPT1, and the EFC of each RPT is taken from the
@@ -15,10 +20,27 @@ import pandas as pd
 FOLDERS = {"CELL064": "CELL064_25C_full", "CELL017": "CELL017_45C", "CELL009": "CELL009_25C_15-95",
            "CELL026": "CELL026_25C_20-80"}
 HERE = os.path.dirname(os.path.abspath(__file__))
+COLLAB_FILE = "dma_collaborators_discharge.csv"
 
 
-def write_tables(fits_csv, data_dir):
-    fits = pd.read_csv(fits_csv)
+def collaborators_discharge(src_csv):
+    """The discharge rows of the collaborators' combined charge/discharge eSoH table, in
+    our column names, without any expansion column (for the data bundle)."""
+    d = pd.read_csv(src_csv)
+    d = d[d["direction"] == "discharge"]
+    d = d[[c for c in d.columns if "expansion" not in c]]
+    return d.rename(columns={"Cn_Ah": "Cn_total_Ah", "x_100_or_start": "x_start", "y_100_or_start": "y_start",
+                             "lithium_inventory_Ah": "LLI_Ah", "si_ocp_scale_Sv": "si_ocp_scale",
+                             "si_ocp_shift_Uoff_V": "si_ocp_shift_V"}).reset_index(drop=True)
+
+
+def load_fits(source, data_dir):
+    if source == "collaborators":
+        return pd.read_csv(os.path.join(data_dir, COLLAB_FILE))
+    return pd.read_csv(os.path.join(HERE, "results", "dma_new.csv"))
+
+
+def write_tables(fits, data_dir, label):
     for cell, folder in FOLDERS.items():
         d = os.path.join(data_dir, folder)
         efc = pd.read_csv(os.path.join(d, f"{cell}_capacity_fade.csv")).set_index("rpt")["efc"]
@@ -35,15 +57,15 @@ def write_tables(fits_csv, data_dir):
         lli["charge_LLI_loss"] = ref["LLI_Ah"] - lli["charge_LLI"]
         lli["joule_LLI_loss"] = lli["charge_LLI_loss"]
         lli.to_csv(os.path.join(d, f"{cell}_LLI.csv"), index=False)
-        print(f"{cell}: LAM/LLI tables from the new DMA, RPTs {list(f['rpt'])}")
+        print(f"{cell}: LAM/LLI tables from the {label} DMA, RPTs {list(f['rpt'])}")
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--fits", default=os.path.join(HERE, "results", "dma_new.csv"))
+    ap.add_argument("--source", choices=("collaborators", "new"), default="collaborators")
     ap.add_argument("--data", default=os.path.join(HERE, "..", "data"))
     a = ap.parse_args()
-    write_tables(a.fits, a.data)
+    write_tables(load_fits(a.source, a.data), a.data, a.source)
 
 
 if __name__ == "__main__":

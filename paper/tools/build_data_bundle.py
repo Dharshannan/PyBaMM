@@ -3,6 +3,7 @@ from the study's local files. For the author; readers download the bundle.
 
     python paper/tools/build_data_bundle.py [--dest paper/data] [--pouch-data <Pouch_Data dir>]
                                             [--package <collaborators' Fig. 1 data package>]
+                                            [--collab-dma <collaborators' charge/discharge eSoH CSV>]
 
 From the collaborators' data package it also takes, for the composite DMA
 (paper/dma): the three half-cell OCPs used on discharge (as CSV), and the
@@ -20,7 +21,8 @@ EXP = os.path.join(STUDY, "degradation_test_matrix", "experimental_data")
 OCP = os.path.join(STUDY, "parameters", "data")
 POUCH_DATA = "C:/Shannan_PhD_Stuff_Local/Si_Gr_Expansion_Precursor/Pouch_Data"
 TABLES = ("capacity_fade",)  # no expansion data in the paper release
-# LAM and LLI come from our own composite DMA (voltage + dV/dQ, no expansion): paper/dma
+# LAM and LLI come from the collaborators' expansion-free discharge DMA (cross-checked by paper/dma)
+COLLAB_DMA = "C:/Users/ds3420/Downloads/Re__DMA_On_Si-Gr_Pouch-Cell_Data/charge_discharge_esoh_combined_4cells.csv"
 PACKAGE = "C:/Users/ds3420/Downloads/IC_PYBAMM_FIG1_DATA_PACKAGE_v1_20260927/IC_PYBAMM_FIG1_DATA_PACKAGE_v1_20260927"
 # Half-cell OCPs on discharge: NMC622 lithiating ("sto" in the file is 1 - y), graphite and Si delithiating.
 HALF_CELL_OCPS = {"NMC622_OCP_Lithiation.xlsx": "nmc622_lithiation.csv",
@@ -75,6 +77,8 @@ def main():
     ap.add_argument("--dest", default=os.path.join(REPO, "paper", "data"))
     ap.add_argument("--pouch-data", default=POUCH_DATA, help="source of CELL064's C/20 RPT discharge curves")
     ap.add_argument("--package", default=PACKAGE, help="collaborators' data package (half-cell OCPs, base DMA)")
+    ap.add_argument("--collab-dma", default=COLLAB_DMA,
+                    help="collaborators' expansion-free eSoH fits (the paper's measured LAM/LLI)")
     a = ap.parse_args()
 
     for f in sorted(glob.glob(os.path.join(OCP, "*.csv"))):
@@ -99,7 +103,8 @@ def main():
     sys.path.insert(0, os.path.join(REPO, "paper", "dma"))
     import tables  # noqa: E402
 
-    tables.write_tables(os.path.join(REPO, "paper", "dma", "results", "dma_new.csv"), a.dest)
+    tables.collaborators_discharge(a.collab_dma).to_csv(os.path.join(a.dest, tables.COLLAB_FILE), index=False)
+    tables.write_tables(tables.load_fits("collaborators", a.dest), a.dest, "collaborators'")
     n = sum(len(files) for _, _, files in os.walk(a.dest))
     print(f"{n} files in {a.dest}")
 
