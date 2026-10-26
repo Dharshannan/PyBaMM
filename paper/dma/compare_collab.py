@@ -196,6 +196,8 @@ def main():
     print(plot_pair(modes, "base", R.GIVEN, "Given DMA (voltage + dV/dQ + expansion)", a.out, "dma_collab_vs_given"))
     print(plot_deformation_params(new, base, collab, a.out))
     print(plot_branches(a.package, a.data, new, collab, a.out))
+    for cell in C.FOLDERS:  # the per-RPT fits, now with the collaborators' discharge fits as well
+        print(R.plot_fits(a.data, cell, base[cell], new, a.out, collab[collab["direction"] == "discharge"])[0])
     pd.set_option("display.width", 200)
     print(check_charge_fits(a.package, collab).round(2).to_string(index=False))
 

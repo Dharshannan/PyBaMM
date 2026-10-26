@@ -108,9 +108,10 @@ def plot_modes(modes, out_dir):
     return [st.save(fig, out_dir, "dma_modes_compare")[0]]
 
 
-def plot_fits(data_dir, cell, base, new, out_dir):
+def plot_fits(data_dir, cell, base, new, out_dir, collab=None):
     """Each C/20 RPT: voltage (upper panel) and dV/dQ (lower panel), measured vs given
-    and new DMA fits; four RPTs per block of two rows."""
+    and new DMA fits (and the collaborators' discharge fits, when given); four RPTs per
+    block of two rows."""
     from matplotlib.lines import Line2D
 
     st = _style()
@@ -127,17 +128,18 @@ def plot_fits(data_dir, cell, base, new, out_dir):
         q, v, dvdq, _, _ = C.load_discharge(files[r])
         tb = [base.loc[base["rpt"] == r, p].iloc[0] for p in C.PARAMS]
         tn = [new.loc[(new["cell"] == cell) & (new["rpt"] == r), p].iloc[0] for p in C.PARAMS]
-        vb, vn = hc.voltage(tb, q), hc.voltage(tn, q)
+        fits = [(hc.voltage(tb, q), dict(ls="--", color="0.45")), (hc.voltage(tn, q), dict(color="tab:blue"))]
+        if collab is not None:
+            tc = [collab.loc[(collab["cell"] == cell) & (collab["rpt"] == r), p].iloc[0] for p in C.PARAMS]
+            fits.append((hc.voltage(tc, q), dict(ls=":", color="tab:red")))
         av.plot(q, v, color="k", lw=1.6)
-        av.plot(q, vb, "--", color="0.45", lw=1.0)
-        av.plot(q, vn, color="tab:blue", lw=1.0)
         ad.plot(q, dvdq, color="k", lw=1.6)
-        ad.plot(q, np.gradient(vb, q), "--", color="0.45", lw=1.0)
-        ad.plot(q, np.gradient(vn, q), color="tab:blue", lw=1.0)
+        for vm, sty in fits:
+            av.plot(q, vm, lw=1.0, **sty)
+            ad.plot(q, np.gradient(vm, q), lw=1.0, **sty)
         ad.set_ylim(np.percentile(dvdq, 2) - 0.25, max(0.05, dvdq.max() + 0.1))
-        rb, rn = (1e3 * np.sqrt(np.mean((x - v) ** 2)) for x in (vb, vn))
-        av.text(0.97, 0.95, f"RMSE {rb:.1f} / {rn:.1f} mV", transform=av.transAxes, ha="right", va="top",
-                fontsize=7)
+        rmse = " / ".join(f"{1e3 * np.sqrt(np.mean((vm - v) ** 2)):.1f}" for vm, _ in fits)
+        av.text(0.03, 0.04, f"RMSE {rmse} mV", transform=av.transAxes, ha="left", va="bottom", fontsize=7)
         st.panel_label(av, k, f"RPT{r}")
         st.panel_label(ad, k + 1)
         k += 2
@@ -148,10 +150,12 @@ def plot_fits(data_dir, cell, base, new, out_dir):
     for b in range(nblk):
         ax[2 * b, 0].set_ylabel("Voltage [V]")
         ax[2 * b + 1, 0].set_ylabel("dV/dQ [V/A h]")
-    fig.legend(handles=[Line2D([], [], color="k", lw=1.6, label="Measured, C/20 discharge"),
-                        Line2D([], [], color="0.45", ls="--", label="Given DMA"),
-                        Line2D([], [], color="tab:blue", label="New DMA (PyProBE)")],
-               loc="outside upper center", ncol=3, frameon=False)
+    handles = [Line2D([], [], color="k", lw=1.6, label="Measured, C/20 discharge"),
+               Line2D([], [], color="0.45", ls="--", label="Given DMA"),
+               Line2D([], [], color="tab:blue", label="New DMA (PyProBE)")]
+    if collab is not None:
+        handles.append(Line2D([], [], color="tab:red", ls=":", label="Collaborators' DMA (no expansion)"))
+    fig.legend(handles=handles, loc="outside upper center", ncol=len(handles), frameon=False)
     return [st.save(fig, out_dir, f"dma_fits_{cell}")[0]]
 
 
