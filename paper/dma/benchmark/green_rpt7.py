@@ -3,7 +3,7 @@ bounds and the collaborators' cathode box (Gr LAM 5 %, Si LAM 63 %; old_def.csv)
 settings do not reach a physical split at that RPT (see the benchmark note), so the note shows this one
 fit for all four. Patches old_nodef.csv, new_def.csv, new_nodef.csv and the pyprobe-dma curves.
 
-    python green_rpt7.py   (PyProBE 2.6.1 environment)
+    python green_rpt7.py [variant ...]   (PyProBE 2.6.1 environment; default: the three other variants)
 """
 import os
 import sys
@@ -25,7 +25,7 @@ theta = [green[p] for p in C.PARAMS]
 q, _, _, _, _ = C.load_discharge(C.rpt_files(DATA, CELL)[RPT])
 v = C.HalfCells(DATA).voltage(theta, q)
 
-for label in ("old_nodef", "new_def", "new_nodef"):
+for label in sys.argv[1:] or ("old_nodef", "new_def", "new_nodef"):
     t = pd.read_csv(os.path.join(OUT, f"{label}.csv"))
     i = t.index[(t["cell"] == CELL) & (t["rpt"] == RPT)][0]
     for k in t.columns:
