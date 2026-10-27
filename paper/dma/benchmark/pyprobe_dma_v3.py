@@ -184,15 +184,14 @@ SHIFTS = (-0.06, -0.035, -0.01, 0.015, 0.04)
 DEFORM_BOUNDS = ((0.75, 1.1), (-0.10, 0.03))  # as ../composite_dma.py
 
 
-def fit_rpt(data_dir, cell, rpt, deform, tails=True, path=None):
+def fit_rpt(data_dir, cell, rpt, deform, tails=True):
     """pyprobe-dma fit of one RPT; with deform=True the Si OCP scale and shift are found by a 5 x 5
-    grid and a bounded Nelder-Mead refinement, each evaluation a full pyprobe-dma fit. path: another
-    discharge file of the same layout (default: the C/20 RPT discharge)."""
+    grid and a bounded Nelder-Mead refinement, each evaluation a full pyprobe-dma fit."""
     sys.path.insert(0, os.path.join(HERE, ".."))
     import composite_dma as C
 
     hc = HalfCells(data_dir, tails=tails)
-    vc, ic = curves(path or C.rpt_files(data_dir, cell)[rpt])
+    vc, ic = curves(C.rpt_files(data_dir, cell)[rpt])
     if not deform:
         res = fit_best(hc, vc, ic)
         return summarise(res, cell, rpt, 1.0, 0.0), fit_curve(res)

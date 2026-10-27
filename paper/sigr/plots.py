@@ -46,19 +46,11 @@ def lam_lli(ax, res, cond, data_dir):
     ax.plot(e, an.lli_pct(res, True)[m], color=C_LLI)
     lli = data.load(cond, data_dir, "LLI")
     ax.plot(lli["efc"], 100 * lli["charge_LLI_loss"] / lli["charge_LLI"].iloc[0], "D", ms=3.2, color=C_LLI)
-    hr = data.load_optional(cond, data_dir, "DMA_highrate")
-    if hr is not None:  # DMA of the high-rate neighbour discharges, where no C/20 RPT was recorded
-        for col_name, col, mk in (("LAM_NE_graphite_pct", C_GR, "s"), ("LAM_NE_silicon_pct", C_SI, "s"),
-                                  ("LAM_PE_pct", C_PE, "s"), ("LLI_pct", C_LLI, "D")):
-            ax.plot(hr["efc"], hr[col_name], mk, ms=3.5, mfc="white", mec=col, mew=1.0, zorder=6)
     handles = [Line2D([], [], color=c, marker=mk, ms=3.5, label=lab) for c, mk, lab in
                ((C_SI, "s", "LAM Si"), (C_GR, "s", "LAM graphite"), (C_PE, "s", "LAM positive"), (C_LLI, "D", "LLI"))]
     handles += [Line2D([], [], color="0.3", label="Model"),
-                Line2D([], [], color="0.3", ls="none", marker="s", ms=3.5, label="Measured (DMA)")]
-    if hr is not None:
-        handles.append(Line2D([], [], color="0.3", ls="none", marker="s", ms=3.5, mfc="white", mew=1.0,
-                              label="Measured (DMA), high-rate RPT"))
-    handles.append(Line2D([], [], color=C_LLI, ls="--", label="LLI, side reactions only"))
+                Line2D([], [], color="0.3", ls="none", marker="s", ms=3.5, label="Measured (DMA)"),
+                Line2D([], [], color=C_LLI, ls="--", label="LLI, side reactions only")]
     ax.legend(handles=handles, loc="upper left")
     ax.set_ylabel("LAM, LLI [%]")
     _finish(ax)
