@@ -25,3 +25,12 @@ dma/results/*
 dma/results_run.log
 dma/__pycache__/
 dma/benchmark/*.log
+# per-DMA figure folders (tools/make_paper_figures.py); the expansion-based DMA stays local
+!paper_pics/dma_ours/
+!paper_pics/dma_collaborators/
+!paper_pics/dma_ours/*.png
+!paper_pics/dma_ours/*.pdf
+!paper_pics/dma_collaborators/*.png
+!paper_pics/dma_collaborators/*.pdf
+paper_pics/dma_collaborators_expansion/
+!dma/results/dma_pyprobe_dma.csv

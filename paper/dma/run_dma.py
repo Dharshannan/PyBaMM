@@ -6,8 +6,8 @@ only, and compare with the DMA we were given (base: voltage + dV/dQ + expansion)
 Writes <out>/dma_new.csv (fitted parameters), <out>/dma_modes.csv (LAM and LLI,
 given and new), <out>/dma_fit_scores.csv, the comparison figures (JES style, PNG
 and PDF) <out>/dma_modes_compare.* and <out>/dma_fits_<cell>.*, and the LaTeX
-table <out>/dma_table.tex. Then `python tables.py` writes the paper's LAM/LLI
-tables from dma_new.csv.
+table <out>/dma_table.tex. `python tables.py --source pyprobe` writes LAM/LLI
+tables from dma_new.csv (the paper's own come from pyprobe-dma, `--source ours`).
 """
 import argparse
 import os

@@ -1,11 +1,14 @@
 """Write the measured LAM and LLI tables the paper code reads (sigr.data) from an
 expansion-free composite DMA.
 
-    python tables.py [--source collaborators|new] [--data ../data]
+    python tables.py [--source ours|collaborators|collaborators-expansion|pyprobe] [--data ../data]
 
-source "collaborators" (the paper's choice): the collaborators' discharge fits
-(voltage-based, no expansion in the objective), kept in the data bundle as
-<data>/dma_collaborators_discharge.csv. source "new": our PyProBE refit,
+source "ours" (the paper's choice): our pyprobe-dma fits (trimmed discharge, Si OCP
+deformed; benchmark/pyprobe_dma_v3.py), results/dma_pyprobe_dma.csv. "collaborators":
+the collaborators' discharge fits (voltage-based, no expansion in the objective), kept
+in the data bundle as <data>/dma_collaborators_discharge.csv. "collaborators-expansion":
+their original fits with the expansion in the objective, <folder>/<CELL>_dma_base.csv
+(local only: expansion data are not released). "pyprobe": our PyProBE 2.6.1 refit,
 results/dma_new.csv (the cross-check).
 
 <folder>/<CELL>_LAM_derived.csv and <folder>/<CELL>_LLI.csv keep their columns;
@@ -34,10 +37,21 @@ def collaborators_discharge(src_csv):
                              "si_ocp_shift_Uoff_V": "si_ocp_shift_V"}).reset_index(drop=True)
 
 
+SOURCES = ("ours", "collaborators", "collaborators-expansion", "pyprobe")
+
+
 def load_fits(source, data_dir):
+    if source == "ours":
+        return pd.read_csv(os.path.join(HERE, "results", "dma_pyprobe_dma.csv"))
     if source == "collaborators":
         return pd.read_csv(os.path.join(data_dir, COLLAB_FILE))
-    return pd.read_csv(os.path.join(HERE, "results", "dma_new.csv"))
+    if source == "collaborators-expansion":
+        return pd.concat([pd.read_csv(os.path.join(data_dir, folder, f"{cell}_dma_base.csv"))
+                          .rename(columns={"cell_label": "cell"}) for cell, folder in FOLDERS.items()],
+                         ignore_index=True)
+    if source == "pyprobe":
+        return pd.read_csv(os.path.join(HERE, "results", "dma_new.csv"))
+    raise ValueError(f"unknown DMA source {source!r}")
 
 
 def write_tables(fits, data_dir, label):
@@ -62,7 +76,7 @@ def write_tables(fits, data_dir, label):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--source", choices=("collaborators", "new"), default="collaborators")
+    ap.add_argument("--source", choices=SOURCES, default="ours")
     ap.add_argument("--data", default=os.path.join(HERE, "..", "data"))
     a = ap.parse_args()
     write_tables(load_fits(a.source, a.data), a.data, a.source)

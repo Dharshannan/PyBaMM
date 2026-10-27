@@ -6,7 +6,8 @@
 Per condition (plots.py): overall summary, C/20 RPT voltage and dV/dSoC
 against depth of discharge, Si crack/porosity diagnostics. Shared: the
 measured-data overview, the two mechanism schematics, the ablations
-(ablations.py) and the partial-window comparison of the Discussion.
+(ablations.py) and the partial-window comparison of the Discussion. The
+figures with DMA data go to one subfolder per DMA (make_all's dma).
 """
 import os
 
@@ -341,21 +342,32 @@ def partial_windows(data_dir, results_dir):
 
 
 # ---------------------------------------------------------------------------
-def make_all(data_dir, results_dir, ablations_dir, out_dir, log=print):
-    """Write every paper figure (PNG at 300 dpi and PDF, printed size) to out_dir.
+DMA_FIGURES = ("overall_summary",)  # per condition; with data_overview and ablations, the figures with DMA data
+
+
+def make_all(data_dir, results_dir, ablations_dir, out_dir, log=print, dma=None):
+    """Write every paper figure (PNG at 300 dpi and PDF, printed size). Figures without DMA data go to
+    out_dir; those with it (overall summaries, data overview, ablations) to out_dir/<folder> for each
+    {folder: data directory with that DMA's LAM/LLI tables} in dma (default {"dma_ours": data_dir}).
     The ablation figure is skipped when ablations_dir has no results."""
     style.use()
+    dma = dma or {"dma_ours": data_dir}
+    have_ablations = ablations_dir and os.path.isdir(ablations_dir)
     for key, cond in CONDITIONS.items():
         res, curves = an.load(key, results_dir)
-        for p in plots.save_all(res, curves, cond, data_dir, out_dir).values():
+        for p in plots.save_all(res, curves, cond, data_dir, out_dir, exclude=DMA_FIGURES).values():
             log("written", p)
-    figs = {"data_overview": lambda: data_overview(data_dir),
-            "schematic_mech1": lambda: schematic_mech1(results_dir),
+        for folder, d in dma.items():
+            for p in plots.save_all(res, curves, cond, d, os.path.join(out_dir, folder), only=DMA_FIGURES).values():
+                log("written", p)
+    figs = {"schematic_mech1": lambda: schematic_mech1(results_dir),
             "schematic_mech2": lambda: schematic_mech2(results_dir),
             "discussion_partial_windows": lambda: partial_windows(data_dir, results_dir)}
-    if ablations_dir and os.path.isdir(ablations_dir):
-        figs["ablations"] = lambda: ablations.figure(data_dir, ablations_dir, results_dir)
+    for folder, d in dma.items():
+        figs[os.path.join(folder, "data_overview")] = lambda d=d: data_overview(d)
+        if have_ablations:
+            figs[os.path.join(folder, "ablations")] = lambda d=d: ablations.figure(d, ablations_dir, results_dir)
     for name, make in figs.items():
         fig = make()
-        log("written", style.save(fig, out_dir, name)[0])
+        log("written", style.save(fig, os.path.join(out_dir, os.path.dirname(name)), os.path.basename(name))[0])
         plt.close(fig)

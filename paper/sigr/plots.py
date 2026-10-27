@@ -168,17 +168,21 @@ def crack_diagnostics(res, cond):
     return fig
 
 
-def save_all(res, curves, cond, data_dir, out_dir):
-    """Write the four per-condition figures (PNG at 300 dpi and PDF) to out_dir."""
+def save_all(res, curves, cond, data_dir, out_dir, only=None, exclude=()):
+    """Write the four per-condition figures (PNG at 300 dpi and PDF) to out_dir, or those named in only,
+    less those in exclude."""
     style.use()
-    figs = {
-        "overall_summary": overall_summary(res, curves, cond, data_dir),
-        "rpt_voltage_dod": rpt_dod(res, curves, cond, data_dir, "voltage"),
-        "rpt_dvdsoc_dod": rpt_dod(res, curves, cond, data_dir, "dvdsoc"),
-        "crack_diagnostics": crack_diagnostics(res, cond),
+    makers = {
+        "overall_summary": lambda: overall_summary(res, curves, cond, data_dir),
+        "rpt_voltage_dod": lambda: rpt_dod(res, curves, cond, data_dir, "voltage"),
+        "rpt_dvdsoc_dod": lambda: rpt_dod(res, curves, cond, data_dir, "dvdsoc"),
+        "crack_diagnostics": lambda: crack_diagnostics(res, cond),
     }
     paths = {}
-    for name, fig in figs.items():
+    for name, make in makers.items():
+        if (only is not None and name not in only) or name in exclude:
+            continue
+        fig = make()
         paths[name] = style.save(fig, out_dir, f"{cond.key}_{name}")[0]
         plt.close(fig)
     return paths
