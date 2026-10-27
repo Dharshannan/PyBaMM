@@ -33,6 +33,13 @@ def load(cond, data_dir, name):
     return df[df["efc"] >= 0].reset_index(drop=True)
 
 
+def load_optional(cond, data_dir, name):
+    """As load, or None where the table is not in the data directory."""
+    if not os.path.exists(os.path.join(_folder(cond, data_dir), f"{cond.cell}_{name}.csv")):
+        return None
+    return load(cond, data_dir, name)
+
+
 def load_all(cond, data_dir):
     return {name: load(cond, data_dir, name)
             for name in ("capacity_fade", "LLI", "LAM_derived")}
