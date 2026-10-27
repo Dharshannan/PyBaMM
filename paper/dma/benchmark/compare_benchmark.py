@@ -95,7 +95,7 @@ def plot_modes(m):
         rows[i].suptitle(R.TAG[cell], x=0.01, ha="left", fontsize=8, fontweight="bold")
         for j, (col, lab) in enumerate(R.MODES):
             for k, (_, sty) in VARIANTS.items():
-                d = m[(m["cell"] == cell) & (m["variant"] == k)].sort_values("efc")
+                d = m[(m["cell"] == cell) & (m["variant"] == k) & (m["rpt"] >= 1)].sort_values("efc")  # from RPT1
                 ax[j].plot(d["efc"], d[col], lw=1.0, **sty)
             ax[j].axhline(0, color="k", lw=0.5)
             ax[j].set_ylabel(lab)

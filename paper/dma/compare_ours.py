@@ -55,7 +55,8 @@ def all_modes(data_dir):
 
 
 def plot_modes(modes, dmas, out_dir, name):
-    """LAM (Si, graphite, positive) and LLI against EFC, one row per cell, for the DMAs named."""
+    """LAM (Si, graphite, positive) and LLI against EFC since RPT1, one row per cell, for the DMAs named
+    (RPT1 onwards: RPT0 precedes the reference)."""
     st = R._style()
     cells = list(C.FOLDERS)
     fig = plt.figure(figsize=(st.DOUBLE_IN, 7.6), layout="constrained")
@@ -67,7 +68,7 @@ def plot_modes(modes, dmas, out_dir, name):
         for j, (col, lab) in enumerate(R.MODES):
             a = ax[j]
             for d in dmas:
-                m = modes[(modes["cell"] == cell) & (modes["dma"] == d)].sort_values("efc")
+                m = modes[(modes["cell"] == cell) & (modes["dma"] == d) & (modes["rpt"] >= 1)].sort_values("efc")
                 a.plot(m["efc"], m[col], **STYLE[d])
             a.axhline(0, color="k", lw=0.5)
             a.set_ylabel(lab)
@@ -163,10 +164,11 @@ def plot_deformation(data_dir, f, out_dir, collab_all=None):
         efc_of = dict(zip(b["rpt"], b["EFC"] - efc0))
         series = []
         for name in ("given", "ours", "collaborators"):
-            t = f[name][f[name]["cell"] == cell].sort_values("rpt")
+            t = f[name][(f[name]["cell"] == cell) & (f[name]["rpt"] >= 1)].sort_values("rpt")
             series.append((t, t["rpt"].map(efc_of), STYLE[name]))
         if collab_all is not None:
-            t = collab_all[(collab_all["cell"] == cell) & (collab_all["direction"] == "charge")].sort_values("rpt")
+            t = collab_all[(collab_all["cell"] == cell) & (collab_all["direction"] == "charge")
+                           & (collab_all["rpt"] >= 1)].sort_values("rpt")
             series.append((t, t["EFC"] - efc0, COLLAB_C))
         for t, e, sty in series:
             ax[0, j].plot(e, t["si_ocp_scale"], **sty)
