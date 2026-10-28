@@ -280,13 +280,13 @@ def schematic_mech2(results_dir):
     a3 = sf[1, 1].subplots()
     a3.axis("off")
     _box(a3, 0.0, 0.83, 1.0, 0.16, [("Route A: Paris law (tension only)", 7.5),
-                                    (r"$\mathrm{d}l/\mathrm{d}t = k_{cr}(T)\,[\sigma_t(1-l/R_\mathrm{Si})\,b_{cr}\sqrt{\pi l}\,]^{m_{cr}}$", 7.5)])
-    a3.text(0.5, 0.807, "+", ha="center", va="center", fontsize=8, transform=a3.transAxes)
+                                    (r"$\mathrm{d}\ell \,/\,\mathrm{d}t = k_{cr}(T)\,[\sigma_t(1-\ell \,/\,R_\mathrm{Si})\,b_{cr}\sqrt{\pi \ell}\,]^{m_{cr}}$", 7.5)])
+    a3.text(0.5, 0.8035, "+", ha="center", va="center_baseline", fontsize=8, transform=a3.transAxes)
     _box(a3, 0.0, 0.555, 1.0, 0.225, [("Route B: volume-strain fatigue (contraction only)", 7.5),
-                                      (r"$\mathrm{d}l/\mathrm{d}t = k_V(T)\,\max(-\dot\varepsilon_V, 0)\,l\,(1-l/R_\mathrm{Si})$", 7.5),
-                                      (r"Miner-linear: $\Delta\ln l \approx k_V\,\Delta\varepsilon_V$ per contraction", 7.5)])
+                                      (r"$\mathrm{d}\ell \,/\,\mathrm{d}t = k_V(T)\,\max(-\dot\varepsilon_V, 0)\,\ell \,(1-\ell \,/\,R_\mathrm{Si})$", 7.5),
+                                      (r"Miner-linear: $\Delta\ln \ell  \approx k_V\,\Delta\varepsilon_V$ per contraction", 7.5)])
     _arrow(a3, 0.5, 0.555, 0.5, 0.505)
-    _box(a3, 0.06, 0.395, 0.88, 0.11, [(r"Crack length $l$ $\Rightarrow$ roughness $\Lambda = 1 + 2\,l\,w_{cr}N_{cr}$", 7.5)])
+    _box(a3, 0.06, 0.395, 0.88, 0.11, [(r"Crack length $\ell $ $\Rightarrow$ roughness $\Lambda = 1 + 2\,\ell \,w_{cr}N_{cr}$", 7.5)])
     _arrow(a3, 0.5, 0.395, 0.5, 0.345)
     _box(a3, 0.06, 0.235, 0.88, 0.11, [("SEI on the new crack faces: LLI and pore filling", 7.5)])
     _arrow(a3, 0.5, 0.235, 0.5, 0.185)
