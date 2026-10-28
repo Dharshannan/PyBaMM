@@ -133,10 +133,10 @@ def schematic_mech1(results_dir, key="25deg_15-95_soc"):
 
     a1 = sf[0, 1].subplots()
     h = np.linspace(0, 1, 400)
-    for eta, col, lab in ((20, C_SI, r"Si, $\eta$ = 20"), (10, C_GR, r"Graphite, $\eta$ = 10")):
+    for eta, col, lab in ((20, C_SI, r"Si, $\omega$ = 20"), (10, C_GR, r"Graphite, $\omega$ = 10")):
         a1.plot(h, (1 - h) ** eta, color=col, lw=1.5, label=lab)
     a1.set_xlabel(r"Porosity headroom $h$ [-]")
-    a1.set_ylabel(r"Gate $g^\ast = (1-h)^\eta$ [-]")
+    a1.set_ylabel(r"Gate $g^\ast = (1-h)^\omega$ [-]")
     a1.invert_xaxis()
     a1.legend(loc="upper left")
     top = a1.secondary_xaxis("top", functions=(lambda hh: EPS_MIN + hh * (EPS0 - EPS_MIN),
@@ -154,7 +154,7 @@ def schematic_mech1(results_dir, key="25deg_15-95_soc"):
     m = an.life_mask(res)
     a2.plot(e_age, hh, color="#2c7fb8", lw=1.4, label=r"Headroom $h$")
     a2.plot(e_age, gate, color=C_SI, lw=1.2, ls="--", label=r"Gate $g^\ast$")
-    a2.plot(e_age, dose / dose.max(), color="k", lw=1.2, ls="-.", label=r"Dose $D$ (normalised)")
+    a2.plot(e_age, dose / dose.max(), color="k", lw=1.2, ls="-.", label=r"Dose $\Gamma$ (normalised)")
     a2.plot(an.efc(res, res["thr"])[m], res["LAM_si"][m] / 100, color=C_ISO, lw=1.5, label="Si LAM (fraction)")
     a2.set_xlabel(plots.EFC_LABEL)
     a2.set_ylabel("Normalised value [-]")
@@ -166,14 +166,14 @@ def schematic_mech1(results_dir, key="25deg_15-95_soc"):
     _box(a3, 0.0, 0.81, 1.0, 0.17, [("SEI growth (particle surfaces and crack faces)", 7.5),
                                     (r"reduces the porosity $\varepsilon$", 7.5)])
     _arrow(a3, 0.5, 0.81, 0.5, 0.745)
-    _box(a3, 0.0, 0.575, 1.0, 0.17, [(r"Gate $g^\ast = (1-h)^\eta$", 7.5),
+    _box(a3, 0.0, 0.575, 1.0, 0.17, [(r"Gate $g^\ast = (1-h)^\omega$", 7.5),
                                      ("(shut until the pores near their floor)", 7.5)])
     _arrow(a3, 0.5, 0.575, 0.5, 0.51)
-    _box(a3, 0.0, 0.34, 1.0, 0.17, [(r"Dose $\mathrm{d}D/\mathrm{d}t = g^\ast$", 7.5),
-                                    (r"(after closure, $D \propto \Delta t$)", 7.5)])
+    _box(a3, 0.0, 0.34, 1.0, 0.17, [(r"Dose $\mathrm{d}\Gamma/\mathrm{d}t = g^\ast$", 7.5),
+                                    (r"(after closure, $\Gamma \propto \Delta t$)", 7.5)])
     _arrow(a3, 0.5, 0.34, 0.5, 0.275)
     _box(a3, 0.0, 0.0, 1.0, 0.275, [
-        (r"Isolation LAM: $\dot\varepsilon_s = k_\mathrm{iso}(T)\,D\,a j_\mathrm{SEI}/F\,(\varepsilon_s/\varepsilon_{s,0})$", 7.5),
+        (r"Isolation LAM: $\dot\varepsilon_s = k_\mathrm{iso}(T)\,\Gamma\,a j_\mathrm{SEI}/F\,(\varepsilon_s/\varepsilon_{s,0})$", 7.5),
         (r"$\Rightarrow$ LAM $\propto \Delta t^2$ (knee), rounded off by Si depletion", 7.5),
         (r"Trapped Li: $\theta\,(c_\mathrm{max}-\bar c)$ per isolated volume", 7.5)], fc="#fdecea", ec=C_ISO)
     style.panel_label(a3, 3)
@@ -255,10 +255,10 @@ def schematic_mech2(results_dir):
         a1.plot(s, 3 * n * s ** (n - 1) / v, color="#2c7fb8", lw=1.1, ls=ls)
     a1.set_xlabel(r"Si stoichiometry $\bar s$ [-]")
     a1.set_ylabel(r"$\varepsilon_V$, d$\varepsilon_V$/d$\bar s$ [-]")
-    a1.legend(handles=[Line2D([], [], color=C_SI, label=r"$\varepsilon_V = \ln(1+3\bar s^{\,n})$"),
+    a1.legend(handles=[Line2D([], [], color=C_SI, label=r"$\varepsilon_V = \ln(1+3\bar s^{\,\lambda})$"),
                        Line2D([], [], color="#2c7fb8", label=r"d$\varepsilon_V$/d$\bar s$"),
-                       Line2D([], [], color="0.3", label=r"$n$ = 1.56 (beginning of life)"),
-                       Line2D([], [], color="0.3", ls="--", label=r"$n$ = 2.19 (aged)")], loc="upper left", ncol=2)
+                       Line2D([], [], color="0.3", label=r"$\lambda$ = 1.56 (beginning of life)"),
+                       Line2D([], [], color="0.3", ls="--", label=r"$\lambda$ = 2.19 (aged)")], loc="upper left", ncol=2)
     a1.set_ylim(0, 2.45)
     style.panel_label(a1, 1)
 
@@ -280,18 +280,18 @@ def schematic_mech2(results_dir):
     a3 = sf[1, 1].subplots()
     a3.axis("off")
     _box(a3, 0.0, 0.83, 1.0, 0.16, [("Route A: Paris law (tension only)", 7.5),
-                                    (r"$\mathrm{d}l/\mathrm{d}t = k_{cr}(T)\,[\sigma_t(1-l/R)\,b_{cr}\sqrt{\pi l}\,]^{m_{cr}}$", 7.5)])
+                                    (r"$\mathrm{d}l/\mathrm{d}t = k_{cr}(T)\,[\sigma_t(1-l/R_\mathrm{Si})\,b_{cr}\sqrt{\pi l}\,]^{m_{cr}}$", 7.5)])
     a3.text(0.5, 0.807, "+", ha="center", va="center", fontsize=8, transform=a3.transAxes)
     _box(a3, 0.0, 0.555, 1.0, 0.225, [("Route B: volume-strain fatigue (contraction only)", 7.5),
-                                      (r"$\mathrm{d}l/\mathrm{d}t = k_V(T)\,\max(-\dot\varepsilon_V, 0)\,l\,(1-l/R)$", 7.5),
+                                      (r"$\mathrm{d}l/\mathrm{d}t = k_V(T)\,\max(-\dot\varepsilon_V, 0)\,l\,(1-l/R_\mathrm{Si})$", 7.5),
                                       (r"Miner-linear: $\Delta\ln l \approx k_V\,\Delta\varepsilon_V$ per contraction", 7.5)])
     _arrow(a3, 0.5, 0.555, 0.5, 0.505)
-    _box(a3, 0.06, 0.395, 0.88, 0.11, [(r"Crack length $l$ $\Rightarrow$ roughness $\rho = 1 + 2\,l\,w_{cr}\rho_{cr}$", 7.5)])
+    _box(a3, 0.06, 0.395, 0.88, 0.11, [(r"Crack length $l$ $\Rightarrow$ roughness $\Lambda = 1 + 2\,l\,w_{cr}N_{cr}$", 7.5)])
     _arrow(a3, 0.5, 0.395, 0.5, 0.345)
     _box(a3, 0.06, 0.235, 0.88, 0.11, [("SEI on the new crack faces: LLI and pore filling", 7.5)])
     _arrow(a3, 0.5, 0.235, 0.5, 0.185)
     _box(a3, 0.06, 0.075, 0.88, 0.11, [(r"Pores close $\Rightarrow$ isolation (mechanism I)", 7.5)], fc="#fdecea", ec=C_ISO)
-    a3.text(0.5, 0.0, r"Both routes slower when hot: $E_{cr}$ = +90, $E_V$ = +150 kJ mol$^{-1}$",
+    a3.text(0.5, 0.0, r"Both routes slower when hot: $E_{a,cr}$ = +90, $E_{a,V}$ = +150 kJ mol$^{-1}$",
             ha="center", va="bottom", fontsize=7, transform=a3.transAxes, color="#444")
     style.panel_label(a3, 3)
     return fig
