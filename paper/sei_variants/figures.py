@@ -147,7 +147,7 @@ def si_low_d():
     d = os.path.join(RUNS, "diffusion_both", f"D{LOW_D:.1e}")
     out = os.path.join(FIGS, "low_d")
     style.use()
-    fig, ax = plt.subplots(len(KEYS), 3, figsize=(style.DOUBLE_IN, 9.4), layout="constrained")
+    fig, ax = plt.subplots(len(KEYS), 3, figsize=(style.DOUBLE_IN, 8.2), layout="constrained")
     paths = []
     for r, key in enumerate(KEYS):
         cond = sigr.CONDITIONS[key]
@@ -155,6 +155,8 @@ def si_low_d():
         plots.soh(ax[r][0], res, cond, DATA)
         plots.lam_lli(ax[r][1], res, cond, DATA)
         plots.rpt_voltage(ax[r][2], res, curves, cond, DATA)
+        leg = ax[r][2].get_legend()  # clear of the colour bar at this panel height
+        ax[r][2].legend(handles=leg.legend_handles, loc="lower left")
         if r:
             for a in ax[r][:2]:
                 a.get_legend().remove()
