@@ -1,0 +1,31 @@
+# Single-law SEI variants (rejected, Sec. 3.1 and Supplementary Figs. S1-S7)
+
+The paper (Sec. 3.1) uses one mixed kinetic-diffusion SEI law (Safari2009, in the form of Yang2017):
+the kinetic term is kept on graphite and silicon uses its diffusion limit (Bonkile2024). These runs are the
+evidence for rejecting the two single-law alternatives, each swept over its one free constant on all four cells
+with every other parameter of the shared set unchanged:
+
+| variant | SEI option (graphite, silicon) | swept | values |
+|---|---|---|---|
+| `diffusion_both` | solvent-diffusion limited, solvent-diffusion limited | `gr_sei_solvent_diffusivity` (D_sol,Gr, m2/s) | 1.25e-23 ... 2e-21 |
+| `kinetic_both` | ec reaction limited, ec reaction limited | `si_sei_k` (k_SEI,Si, m/s) | 1e-16 ... 3e-15 |
+
+- `sweep.py <variant> [values] [cells]` runs a sweep in parallel; runs go to `runs/<variant>/<value>/`
+  (git-ignored, ~200 MB).
+- `figures.py` writes, with our pyprobe-dma DMA:
+  - `figures/si_<variant>.png|pdf`: Supplementary Figs. S1 (diffusion) and S2 (kinetic), one row per cell
+    (C/20 SoH, graphite SEI, Si SEI, LLI; SEI = particle surface + crack faces);
+  - `figures/<variant>/compare_<cell>.png|pdf` and `figures/<variant>/<value>/<cell>_overall_summary.png|pdf`;
+  - `figures/low_d/`: the negligible-graphite-SEI run (D_sol,Gr = 1.25e-23), Supplementary Figs. S3-S7;
+  - `scores.csv`: mean |SoH gap| at the C/20 RPTs reached, mean C/20 voltage RMSE, SEI and SoH at end of test.
+
+The Supplementary PDFs are copied to `manuscript_overleaf/figures/paper_pics/si/`.
+
+Result (2026-10-28), mean |SoH gap| over the four cells: 3.4 pp for the paper runs; 3.8-16 pp for
+`diffusion_both`; 6.8-68 pp for `kinetic_both`.
+
+- **Kinetic on both:** the silicon SEI rises abruptly once the pores close, so the knees are near-vertical. No k_SEI,Si
+  gives both the 25 degC and the 45 degC knee, and most runs reach the 30 % SoH floor early.
+- **Diffusion on both:** a D_sol,Gr large enough to supply the late graphite SEI grows it from the first cycle, which
+  fills the pores early and brings the knees of the long-life cells forward. The smallest D leaves almost no graphite
+  SEI: the fits are close, but the late fade is under-predicted (25 degC full window: 53.7 vs 50 % at the last RPT).

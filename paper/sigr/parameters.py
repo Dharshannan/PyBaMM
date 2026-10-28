@@ -78,7 +78,7 @@ V7 = dict(
     si_volume_exp_bol=1.561216606871758, si_volume_exp_end=2.18807468386046,
     # Graphite
     gr_lam_beta=2.7804e-07, gr_lam_m=2.0, gr_critical_stress=3.0e7, gr_crack_rate=3.9e-21,
-    gr_sei_Ea=38000.0, gr_sei_k=6e-18,
+    gr_sei_Ea=38000.0, gr_sei_k=6e-18, gr_sei_solvent_diffusivity=2.5e-22,  # D_sol used by the solvent-diffusion law only
     # Positive electrode stress-driven LAM (saturating "power" damping)
     pos_lam_beta=2.7778e-07 * 120, pos_lam_Ea=-55000.0, pos_lam_damping_exponent=50.0,
     # SEI, porosity, pore buffering
@@ -201,6 +201,7 @@ def parameter_values(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, p=V7):
         "Primary: Negative electrode cracking rate": p["gr_crack_rate"],
         "Primary: SEI growth activation energy [J.mol-1]": p["gr_sei_Ea"],
         "Primary: SEI kinetic rate constant [m.s-1]": p["gr_sei_k"],
+        "Primary: SEI solvent diffusivity [m2.s-1]": p["gr_sei_solvent_diffusivity"],
         "Primary: SEI resistivity [Ohm.m]": p["sei_resistivity"],
         "Primary: SEI reaction exponent cap": p["sei_exponent_cap"],
         "Primary: Negative electrode porosity-isolation LAM exponent": p["gr_iso_exponent"],

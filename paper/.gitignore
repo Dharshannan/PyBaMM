@@ -34,3 +34,11 @@ dma/benchmark/*.log
 !paper_pics/dma_collaborators/*.pdf
 paper_pics/dma_collaborators_expansion/
 !dma/results/dma_pyprobe_dma.csv
+# single-law SEI variants (rejected, Sec. 3.1): runs local, figures and scores kept
+sei_variants/runs/
+!sei_variants/figures/*.png
+!sei_variants/figures/*.pdf
+!sei_variants/figures/*/*.png
+!sei_variants/figures/*/*.pdf
+!sei_variants/figures/*/*/*.png
+!sei_variants/figures/*/*/*.pdf
