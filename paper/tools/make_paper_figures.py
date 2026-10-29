@@ -1,6 +1,6 @@
 """Write every paper figure, at its printed JES size, to paper/paper_pics.
 
-    python paper/tools/make_paper_figures.py [--results paper/results] [--ablations paper/outputs_ablations]
+    python paper/tools/make_paper_figures.py [--results paper/results] [--ablations paper/outputs_ablations_v7]
 
 Figures with DMA data (overall summaries, data overview, ablations) are written once per DMA, each from a
 copy of the data directory with that DMA's LAM/LLI tables (dma/tables.py), to paper_pics/<folder>:
@@ -43,7 +43,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default=os.path.join(HERE, "data"))
     ap.add_argument("--results", default=os.path.join(HERE, "results"))
-    ap.add_argument("--ablations", default=os.path.join(HERE, "outputs_ablations"))
+    ap.add_argument("--ablations", default=os.path.join(HERE, "outputs_ablations_v7"))
     ap.add_argument("--out", default=os.path.join(HERE, "paper_pics"))
     ap.add_argument("--work", default=os.path.join(HERE, "outputs", "dma_data"))
     a = ap.parse_args()
