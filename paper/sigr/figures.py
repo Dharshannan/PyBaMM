@@ -342,6 +342,62 @@ def partial_windows(data_dir, results_dir):
 
 
 # ---------------------------------------------------------------------------
+# Results: mechanism chain, Paris-led against strain-led cracking
+# ---------------------------------------------------------------------------
+def crack_comparison(data_dir, results_dir, keys=("25deg_full_soc", "25deg_15-95_soc")):
+    """Si cracking and pore closure of two cells overlaid (one colour per cell): crack length, roughness, peak
+    surface tangential stress of each cycle, per-cycle minimum porosity, Si SEI LLI (surface and crack faces),
+    cumulative contraction strain, crack growth by route, and Si LAM against the DMA."""
+    fig, axs = plt.subplots(4, 2, figsize=(style.DOUBLE_IN, 6.6), sharex=True, layout="constrained")
+    ax = axs.flat
+    to_pct = 100 / 2.5947
+    for key in keys:
+        cond, col = CONDITIONS[key], CELL_COLOR[key]
+        res, _ = an.load(key, results_dir)
+        e = an.efc(res, res["thr"])
+        m = an.life_mask(res)
+        ax[0].plot(e, res["crack_length"] / res["crack_length"][0], color=col)
+        ax[1].plot(e, res["roughness"], color=col)
+        cyc = np.isin(res["cycle_thr"], res["age_thr"])  # ageing cycles only (formation and RPTs left out)
+        ax[2].plot(an.efc(res, res["cycle_thr"])[cyc], res["cycle_peak_stress_MPa"][cyc], ".", ms=1.5, color=col)
+        # per-cycle minimum porosity; the first cycle after an RPT starts from a full charge (left out for partial)
+        after_rpt = np.searchsorted(res["age_thr"], res["rpt_thr"], side="right")
+        keep = np.ones(res["age_thr"].size, bool)
+        keep[after_rpt[after_rpt < keep.size]] = not cond.partial
+        ax[3].plot(np.r_[0.0, an.efc(res, res["age_thr"])[keep]],
+                   np.r_[res["initial_porosity"], res["age_min_porosity"][keep]], color=col)
+        ax[4].plot(e, res["Q_si_sei_cracks"] * to_pct, color=col)
+        ax[4].plot(e, res["Q_si_sei"] * to_pct, color=col, ls="--")
+        ax[5].plot(e, res["strain_E"], color=col)
+        ax[6].plot(e, 1e9 * res["dl_paris"], color=col)
+        ax[6].plot(e, 1e9 * res["dl_strain"], color=col, ls="--")
+        ax[7].plot(e[m], res["LAM_si"][m], color=col)
+        lam = data.load(cond, data_dir, "LAM_derived")
+        ax[7].plot(lam["efc"], lam["LAM_NE_silicon_pct"], "s", ms=3.5, color=col)
+    ax[3].axhline(EPS_MIN, color="gray", ls=":", lw=0.8)
+    for a, lab in zip(ax, ("Si crack length / initial [-]", "Si roughness ratio [-]",
+                           "Peak Si surface tangential\nstress, ageing cycles [MPa]",
+                           "Negative electrode porosity,\nper-cycle minimum [-]", "LLI to Si SEI [%]",
+                           "Cumulative Si\ncontraction strain [-]", "Cumulative crack growth [nm]", "Si LAM [%]")):
+        a.set_ylabel(lab)
+    for a in axs[-1]:
+        a.set_xlabel(plots.EFC_LABEL)
+    ax[4].legend(handles=[Line2D([], [], color="0.3", label="Crack faces"),
+                          Line2D([], [], color="0.3", ls="--", label="Particle surface")], loc="upper left")
+    ax[6].legend(handles=[Line2D([], [], color="0.3", label="Route A (Paris, diffusion stress)"),
+                          Line2D([], [], color="0.3", ls="--", label="Route B (volume-strain fatigue)")],
+                 loc="upper left")
+    ax[7].legend(handles=[Line2D([], [], color="0.3", label="Model"),
+                          Line2D([], [], color="0.3", ls="none", marker="s", ms=3.5, label="Measured (DMA)")],
+                 loc="upper left")
+    for i, a in enumerate(ax):
+        style.panel_label(a, i)
+    fig.legend(handles=[Line2D([], [], color=CELL_COLOR[k], lw=1.4, label=ablations.cond_tag(CONDITIONS[k]))
+                        for k in keys], loc="outside upper center", ncol=len(keys), frameon=False)
+    return fig
+
+
+# ---------------------------------------------------------------------------
 # Parameterisation: beginning-of-life fit
 # ---------------------------------------------------------------------------
 BOL_DVDQ_WINDOW = {"discharge": (0.02, 0.95), "charge": (0.05, 0.98)}  # normalised capacity scored
@@ -420,7 +476,8 @@ def make_all(data_dir, results_dir, ablations_dir, out_dir, log=print, dma=None)
     figs = {"schematic_mech1": lambda: schematic_mech1(results_dir),
             "schematic_mech2": lambda: schematic_mech2(results_dir),
             "discussion_partial_windows": lambda: partial_windows(data_dir, results_dir),
-            "bol_fit": lambda: bol_fit(data_dir, results_dir)[0]}
+            "bol_fit": lambda: bol_fit(data_dir, results_dir)[0],
+            "crack_comparison": lambda: crack_comparison(data_dir, results_dir)}
     for folder, d in dma.items():
         figs[os.path.join(folder, "data_overview")] = lambda d=d: data_overview(d)
         if have_ablations:
