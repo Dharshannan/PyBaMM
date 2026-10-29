@@ -138,7 +138,7 @@ def si_figure(variant):
     return style.save(fig, FIGS, f"si_{variant}")[0]
 
 
-LOW_D = 1.25e-23  # diffusion_both run with a negligible graphite SEI (Supplementary Figs. S3-S5)
+LOW_D = 1.25e-23  # diffusion_both run with a negligible graphite SEI (Supplementary Figs. S7-S11)
 
 
 def si_low_d():

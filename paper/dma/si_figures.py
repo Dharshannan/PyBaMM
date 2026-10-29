@@ -1,4 +1,4 @@
-"""Supplementary figures of the paper's DMA (ours: pyprobe-dma, trimmed C/20 discharge, Si OCP deformed;
+"""Supplementary Figs. S1-S4: the paper's DMA (ours: pyprobe-dma, trimmed C/20 discharge, Si OCP deformed;
 results/dma_pyprobe_dma.csv, fitted curves in results/benchmark/new_def_curves.npz), one per cell: LAM and LLI
 against EFC, and the voltage and dV/dQ of each C/20 RPT from RPT1 on, measured against the fit, with the RMSEs.
 

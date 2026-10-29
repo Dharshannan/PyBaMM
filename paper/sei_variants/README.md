@@ -1,4 +1,4 @@
-# Single-law SEI variants (rejected, Sec. 3.1 and Supplementary Figs. S1-S7)
+# Single-law SEI variants (rejected, Sec. 3.1 and Supplementary Figs. S5-S11)
 
 The paper (Sec. 3.1) uses one mixed kinetic-diffusion SEI law (Safari2009, in the form of Yang2017):
 the kinetic term is kept on graphite and silicon uses its diffusion limit (Bonkile2024). These runs are the
@@ -13,10 +13,10 @@ with every other parameter of the shared set unchanged:
 - `sweep.py <variant> [values] [cells]` runs a sweep in parallel; runs go to `runs/<variant>/<value>/`
   (git-ignored, ~200 MB).
 - `figures.py` writes, with our pyprobe-dma DMA:
-  - `figures/si_<variant>.png|pdf`: Supplementary Figs. S1 (diffusion) and S2 (kinetic), one row per cell
+  - `figures/si_<variant>.png|pdf`: Supplementary Figs. S5 (diffusion) and S6 (kinetic), one row per cell
     (C/20 SoH, graphite SEI, Si SEI, LLI; SEI = particle surface + crack faces);
   - `figures/<variant>/compare_<cell>.png|pdf` and `figures/<variant>/<value>/<cell>_overall_summary.png|pdf`;
-  - `figures/low_d/`: the negligible-graphite-SEI run (D_sol,Gr = 1.25e-23), Supplementary Figs. S3-S7;
+  - `figures/low_d/`: the negligible-graphite-SEI run (D_sol,Gr = 1.25e-23), Supplementary Figs. S7-S11;
   - `scores.csv`: mean |SoH gap| at the C/20 RPTs reached, mean C/20 voltage RMSE, SEI and SoH at end of test.
 
 The Supplementary PDFs are copied to `manuscript_overleaf/figures/paper_pics/si/`.
