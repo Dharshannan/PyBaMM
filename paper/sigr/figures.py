@@ -345,30 +345,42 @@ def partial_windows(data_dir, results_dir):
 # Parameterisation: beginning-of-life fit
 # ---------------------------------------------------------------------------
 def bol_fit(data_dir, results_dir, key="25deg_full_soc", rpt=1, trim=0.01):
-    """Model against measured C/20 discharge at the reference RPT of CELL064: voltage and dV/dQ against
-    discharged capacity. Returns (figure, {"rmse_mV", "q_model_Ah", "q_meas_Ah"})."""
+    """Model against measured C/20 discharge (left) and constant-current C/20 charge (right) at the reference
+    RPT of CELL064: voltage (top) and dV/dQ (bottom) against capacity. The model curves are the formation of
+    the paper run (simulate.bol_curves), cached in results_dir. Returns (figure, {kind: (RMSE [mV], model
+    capacity [A h], measured capacity [A h])})."""
+    from . import simulate  # pybamm import only when this figure is made
     cond = CONDITIONS[key]
-    res, curves = an.load(key, results_dir)
-    j = next(j for r, _, j, _ in an.match_rpt_curves(res, curves, cond, data_dir) if r == rpt)
-    q_r, v_r = data.load_rpt_discharge(cond, data_dir, rpt)
-    q_m, v_m = curves[j]["q"], curves[j]["v"]
-    fig, ax = plt.subplots(2, 1, figsize=(style.SINGLE_IN, 3.6), sharex=True, layout="constrained")
-    keep = q_m >= trim * q_m.max()  # the model's first ~1 % is the step-start transient
-    ax[0].plot(q_r, v_r, color="black", lw=1.3, label="Measured")
-    ax[0].plot(q_m[keep], v_m[keep], "--", color=plots.C_MODEL, lw=1.2, label="Model")
-    for q, v, kw in ((q_r, v_r, dict(color="black", lw=1.3)), (q_m[keep], v_m[keep], dict(color=plots.C_MODEL, lw=1.2, ls="--"))):
-        s, d = an.smooth_dvdsoc(q / q.max(), v)  # binned on a uniform grid, then differentiated
-        ax[1].plot(s * q.max(), d / q.max(), **kw)
-    ax[1].set_ylim(-1.0, 0.1)
-    ax[0].set_ylabel("Terminal voltage [V]")
-    ax[1].set_ylabel("dV/dQ [V A$^{-1}$ h$^{-1}$]")
-    ax[1].set_xlabel("Discharge capacity, C/20 [A h]")
-    ax[0].legend(loc="lower left")
-    for i, a in enumerate(ax):
+    cache = os.path.join(results_dir, f"{key}_bol_curves.npz")
+    if not os.path.exists(cache):
+        c = simulate.bol_curves(cond, data_dir)
+        np.savez(cache, **{f"{k}_{x}": v for k, (q, vv) in c.items() for x, v in (("q", q), ("v", vv))})
+    z = np.load(cache)
+    meas = {"discharge": data.load_rpt_discharge(cond, data_dir, rpt), "charge": data.load_rpt_charge(cond, data_dir, rpt)}
+    fig, ax = plt.subplots(2, 2, figsize=(style.DOUBLE_IN, 3.9), sharex="col", layout="constrained")
+    stats = {}
+    for c, kind in enumerate(("discharge", "charge")):
+        q_r, v_r = meas[kind]
+        q_m, v_m = z[f"{kind}_q"], z[f"{kind}_v"]
+        keep = q_m >= trim * q_m.max()  # the model's first ~1 % is the step-start transient
+        q_m, v_m = q_m[keep], v_m[keep]
+        ax[0, c].plot(q_r, v_r, color="black", lw=1.3, label="Measured")
+        ax[0, c].plot(q_m, v_m, "--", color=plots.C_MODEL, lw=1.2, label="Model")
+        for q, v, kw in ((q_r, v_r, dict(color="black", lw=1.3)), (q_m, v_m, dict(color=plots.C_MODEL, lw=1.2, ls="--"))):
+            x, d = an.smooth_dvdsoc(q / q.max(), v)  # binned on a uniform grid, then differentiated
+            ax[1, c].plot(x * q.max(), d / q.max(), **kw)
+        ax[1, c].set_xlabel(f"{kind.capitalize()} capacity, C/20 [A h]")
+        x = np.linspace(0.02, 0.98, 200)  # voltage RMSE on a common grid of the normalised capacity
+        rmse = np.sqrt(np.mean((np.interp(x, q_m / q_m.max(), v_m) - np.interp(x, q_r / q_r.max(), v_r)) ** 2))
+        stats[kind] = (1e3 * rmse, float(q_m.max()), float(q_r.max()))
+    ax[1, 0].set_ylim(-1.0, 0.1)
+    ax[1, 1].set_ylim(0.0, 1.1)
+    ax[0, 0].set_ylabel("Terminal voltage [V]")
+    ax[1, 0].set_ylabel("dV/dQ [V A$^{-1}$ h$^{-1}$]")
+    ax[0, 0].legend(loc="lower left")
+    for i, a in enumerate(ax.flat):
         style.panel_label(a, i)
-    s = np.linspace(0.02, 0.98, 200)  # voltage RMSE on a common depth-of-discharge grid
-    rmse = np.sqrt(np.mean((np.interp(s, q_m / q_m.max(), v_m) - np.interp(s, q_r / q_r.max(), v_r)) ** 2))
-    return fig, {"rmse_mV": 1e3 * rmse, "q_model_Ah": float(q_m.max()), "q_meas_Ah": float(q_r.max())}
+    return fig, stats
 
 
 # ---------------------------------------------------------------------------

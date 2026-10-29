@@ -309,3 +309,21 @@ def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, 
         log(f"[RPT] at EFC {efc_now(state):.1f} (real RPT at {target:.1f})")
     log(f"{cond.label}: stop reason: {stop}")
     return out.finish()
+
+
+def bol_curves(cond, data_dir, rate_basis_ah=RATE_BASIS_AH):
+    """The formation of run() alone: its C/20 discharge (the model's RPT at EFC 0) and the constant-current
+    part of the C/20 charge that follows, each as (Q from 0 [A.h], V [V])."""
+    model = pybamm.lithium_ion.DFN(MODEL_OPTIONS)
+    param = parameter_values(cond, data_dir, rate_basis_ah, p=V7)
+    solver = pybamm.IDAKLUSolver(root_tol=SOLVER_TOL, atol=SOLVER_TOL, rtol=SOLVER_TOL,
+                                 output_variables=OUTPUT_VARIABLES)
+    steps = [f"Discharge at {RPT_RATE} until {LOWER_CUTOFF_V} V", f"Charge at {RPT_RATE} until {UPPER_CUTOFF_V} V"]
+    experiment = pybamm.Experiment([tuple(pybamm.step.string(s, temperature=RPT_TEMPERATURE_K) for s in steps)])
+    sol = pybamm.Simulation(model, parameter_values=param, experiment=experiment, solver=solver,
+                            var_pts=VAR_PTS).solve(initial_soc=1.0)
+    out = {}
+    for name, step, sign in (("discharge", sol.cycles[0].steps[0], 1.0), ("charge", sol.cycles[0].steps[1], -1.0)):
+        q = sign * step["Discharge capacity [A.h]"].entries
+        out[name] = (q - q[0], step["Terminal voltage [V]"].entries)
+    return out

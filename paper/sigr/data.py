@@ -7,6 +7,8 @@ Layout under the data directory (the Zenodo data record)::
     <data_folder>/<CELL>_LLI.csv                   rpt, efc, charge_LLI, joule_LLI, charge_LLI_loss, joule_LLI_loss
     <data_folder>/<CELL>_LAM_derived.csv           rpt, efc, ..., LAM_NE_graphite_pct, LAM_NE_silicon_pct, LAM_PE_pct
     <data_folder>/low_rate_c20/<CELL>_RPT<nnn>_lowrate_c20_discharge.csv   Q_discharge_Ah, voltage_terminal_V
+    <data_folder>/low_rate_c20/<CELL>_RPT<nnn>_lowrate_c20_charge.csv      Q_charge_Ah, voltage_terminal_V (CC part;
+                                                   CELL064 RPT1 only, for the beginning-of-life figure)
     ocp/*.csv                                      beginning-of-life OCPs (parameters.py)
 
 EFC = throughput / (2 x 2.5 Ah) throughout.
@@ -65,4 +67,13 @@ def load_rpt_discharge(cond, data_dir, rpt):
                         f"{cond.cell}_RPT{rpt:03d}_lowrate_c20_discharge.csv")
     df = pd.read_csv(path, usecols=["Q_discharge_Ah", "voltage_terminal_V"])
     q = df["Q_discharge_Ah"].to_numpy()
+    return q - q[0], df["voltage_terminal_V"].to_numpy()
+
+
+def load_rpt_charge(cond, data_dir, rpt):
+    """(Q from 0 [A.h], V [V]) of the constant-current part of a real C/20 RPT charge."""
+    path = os.path.join(_folder(cond, data_dir), "low_rate_c20",
+                        f"{cond.cell}_RPT{rpt:03d}_lowrate_c20_charge.csv")
+    df = pd.read_csv(path, usecols=["Q_charge_Ah", "voltage_terminal_V"])
+    q = df["Q_charge_Ah"].to_numpy()
     return q - q[0], df["voltage_terminal_V"].to_numpy()
