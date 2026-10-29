@@ -102,8 +102,9 @@ ABLATION_LABEL = {"no_isolation": "No isolation (mechanism I off)",
 
 
 def figure(data_dir, out_dir, baseline_dir, keys=None):
-    """SoH (C/20 RPTs, top row) and Si LAM (bottom row) against EFC, one column
-    per condition: measurement, full model, and each ablation that has results.
+    """SoH (C/20 RPTs, top row), Si LAM (middle row) and LLI (bottom row) against
+    EFC, one column per condition: measurement (DMA for LAM and LLI), full model,
+    and each ablation that has results.
     Printed size, lettered panels, one shared legend (see style.py)."""
     import matplotlib.pyplot as plt
     from matplotlib.lines import Line2D
@@ -114,11 +115,12 @@ def figure(data_dir, out_dir, baseline_dir, keys=None):
 
     style.use()
     keys = list(keys or CONDITIONS)
-    fig, axes = plt.subplots(2, len(keys), figsize=(style.DOUBLE_IN, 3.9), squeeze=False, layout="constrained")
+    fig, axes = plt.subplots(3, len(keys), figsize=(style.DOUBLE_IN, 5.6), sharex="col", squeeze=False,
+                             layout="constrained")
     shown = {}
     for c, key in enumerate(keys):
         cond = CONDITIONS[key]
-        ax_s, ax_l = axes[0, c], axes[1, c]
+        ax_s, ax_l, ax_i = axes[0, c], axes[1, c], axes[2, c]
         cap = data.load(cond, data_dir, "capacity_fade")
         c20, sub = cap[cap["source"] == "C/20 RPT"], cap[cap["source"] != "C/20 RPT"]
         ax_s.plot(c20["efc"], c20["capacity_retention_pct"], "o", ms=4, color="black", zorder=6)
@@ -128,6 +130,9 @@ def figure(data_dir, out_dir, baseline_dir, keys=None):
             shown["sub"] = True
         lam = data.load(cond, data_dir, "LAM_derived")
         ax_l.plot(lam["efc"], lam["LAM_NE_silicon_pct"], "s", ms=3.5, color="black", zorder=6)
+        lli = data.load(cond, data_dir, "LLI")
+        ax_i.plot(lli["efc"], 100 * lli["charge_LLI_loss"] / lli["charge_LLI"].iloc[0], "D", ms=3.2, color="black",
+                  zorder=6)
         runs = [("full", baseline_dir, ("tab:blue", "-"))]
         runs += [(name, os.path.join(out_dir, name), ABLATION_STYLE.get(name, ("gray", "--")))
                  for name, a in ABLATIONS.items() if key in a["keys"] and _available(out_dir, name, key)]
@@ -136,14 +141,17 @@ def figure(data_dir, out_dir, baseline_dir, keys=None):
             ax_s.plot(an.efc(res, res["rpt_thr"]), an.rpt_soh(res), ls=ls, marker="o", ms=2.2, color=col)
             m = an.life_mask(res)
             ax_l.plot(an.efc(res, res["thr"])[m], res["LAM_si"][m], ls=ls, color=col)
+            ax_i.plot(an.efc(res, res["thr"])[m], an.lli_pct(res, True)[m], ls=ls, color=col)
             shown[name] = (col, ls)
         style.panel_label(ax_s, c)
         ax_s.text(0.04, 0.04, cond_tag(cond).replace(", ", "\n", 1), transform=ax_s.transAxes, ha="left",
                   va="bottom", fontsize=7.5)
         style.panel_label(ax_l, len(keys) + c)
-        ax_l.set_xlabel("EFC since RPT1 [-]")
+        style.panel_label(ax_i, 2 * len(keys) + c)
+        ax_i.set_xlabel("EFC since RPT1 [-]")
     axes[0, 0].set_ylabel("SoH, C/20 RPT [%]")
     axes[1, 0].set_ylabel("Si LAM [%]")
+    axes[2, 0].set_ylabel("LLI [%]")
     handles = [Line2D([], [], color="black", ls="none", marker="o", ms=4, label="Measured")]
     if shown.pop("sub", False):
         handles.append(Line2D([], [], color="black", ls="none", marker="o", ms=4, mfc="white",
