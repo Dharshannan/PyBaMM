@@ -93,10 +93,11 @@ def overall_summary(res, curves, cond, data_dir):
 _smooth_dvdsoc = an.smooth_dvdsoc  # one definition, shared with the dV/dSOC score
 
 
-def rpt_dod(res, curves, cond, data_dir, kind="voltage", trim=0.01):
+def rpt_dod(res, curves, cond, data_dir, kind="voltage", trim=0.01, model_label="Model"):
     """Each real C/20 RPT vs its nearest model RPT, normalised to depth of
     discharge: kind = "voltage" (V) or "dvdsoc" (dV/dSOC). Up to four RPTs fit
-    one column (2 x 2); more take two columns (2 x 3 or 2 x 4)."""
+    one column (2 x 2); more take two columns (2 x 3 or 2 x 4). model_label names
+    the run in the legend (e.g. a rejected variant)."""
     pairs = an.match_rpt_curves(res, curves, cond, data_dir)
     ncol = 2 if len(pairs) <= 4 else (3 if len(pairs) <= 6 else 4)
     nrow = int(np.ceil(len(pairs) / ncol))
@@ -108,11 +109,11 @@ def rpt_dod(res, curves, cond, data_dir, kind="voltage", trim=0.01):
         s_r, s_m, v_m = q_r / q_r.max(), curves[j]["q"] / curves[j]["q"].max(), curves[j]["v"]
         if kind == "voltage":
             ax.plot(s_r, v_r, color="black", lw=1.3, label="Measured")
-            ax.plot(s_m, v_m, "--", color=C_MODEL, lw=1.2, label="Model")
+            ax.plot(s_m, v_m, "--", color=C_MODEL, lw=1.2, label=model_label)
         else:  # the model's first ~1% DoD is the step-start transient; dropped
             keep = s_m >= trim
             ax.plot(*_smooth_dvdsoc(s_r, v_r), color="black", lw=1.3, label="Measured")
-            ax.plot(*_smooth_dvdsoc(s_m[keep], v_m[keep]), "--", color=C_MODEL, lw=1.2, label="Model")
+            ax.plot(*_smooth_dvdsoc(s_m[keep], v_m[keep]), "--", color=C_MODEL, lw=1.2, label=model_label)
             ax.set_ylim(-3, 0.5)
         style.panel_label(ax, i, f"RPT{r}, EFC {e_r:.0f}")
         if i == 0:

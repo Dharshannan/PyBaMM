@@ -139,6 +139,14 @@ def si_figure(variant):
 
 
 LOW_D = 1.25e-23  # diffusion_both run with a negligible graphite SEI (Supplementary Figs. S7-S11)
+VARIANT = "Variant (diffusion limit on Gr)"  # legend name, so these figures are not mistaken for the paper model
+
+
+def _relabel(ax, **kw):
+    """Redraw the legend of ax with "Model" renamed to VARIANT."""
+    leg = ax.get_legend()
+    ax.legend(handles=leg.legend_handles, labels=[t.get_text().replace("Model", VARIANT) for t in leg.get_texts()],
+              **kw)
 
 
 def si_low_d():
@@ -155,15 +163,17 @@ def si_low_d():
         plots.soh(ax[r][0], res, cond, DATA)
         plots.lam_lli(ax[r][1], res, cond, DATA)
         plots.rpt_voltage(ax[r][2], res, curves, cond, DATA)
-        leg = ax[r][2].get_legend()  # clear of the colour bar at this panel height
-        ax[r][2].legend(handles=leg.legend_handles, loc="lower left")
+        _relabel(ax[r][2], loc="lower left")  # lower left: clear of the colour bar at this panel height
         if r:
             for a in ax[r][:2]:
                 a.get_legend().remove()
+        else:
+            _relabel(ax[r][0], loc="upper right")
+            _relabel(ax[r][1], loc="upper left")
         for j in range(3):
             style.panel_label(ax[r][j], 3 * r + j, CELL_TITLES[key] if j == 2 else None)
         for kind in ("voltage", "dvdsoc"):
-            f = plots.rpt_dod(res, curves, cond, DATA, kind)
+            f = plots.rpt_dod(res, curves, cond, DATA, kind, model_label=VARIANT)
             paths.append(style.save(f, out, f"{key}_rpt_{kind}")[0])
             plt.close(f)
     paths.insert(0, style.save(fig, out, "summary")[0])

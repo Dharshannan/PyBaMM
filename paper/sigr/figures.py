@@ -398,6 +398,58 @@ def crack_comparison(data_dir, results_dir, keys=("25deg_full_soc", "25deg_15-95
 
 
 # ---------------------------------------------------------------------------
+# Results: C/20 voltage and dV/dSoC at three RPTs of each cell
+# ---------------------------------------------------------------------------
+RPT_ROLES = (("RPT1", "black"), ("last before the knee", "tab:blue"), ("last RPT", "tab:red"))
+DVDSOC_FROM = 0.03  # dV/dSoC drawn from 3 % depth of discharge (step-start transient, edge of the binning)
+
+
+def rpt_selection(data_dir, results_dir, trim=0.01):
+    """One row per cell, against depth of discharge at three measured RPTs (RPT1, the last before the measured
+    knee, the last): the C/20 discharge voltage of all three (first column; measured solid, model dashed), and the
+    dV/dSoC of each in its own panel (measured black, model dashed in the RPT's colour). Returns
+    (figure, {cell: [(rpt, EFC)]})."""
+    keys = list(CONDITIONS)
+    fig, axs = plt.subplots(len(keys), 4, figsize=(style.DOUBLE_IN, 7.8), sharex=True, layout="constrained",
+                            gridspec_kw=dict(width_ratios=[1.25, 1, 1, 1]))
+    chosen = {}
+    for r_, key in enumerate(keys):
+        cond = CONDITIONS[key]
+        res, curves = an.load(key, results_dir)
+        pairs = an.match_rpt_curves(res, curves, cond, data_dir)
+        knee = data.knee_efc(cond, data_dir)
+        before = [p for p in pairs if p[1] < knee]
+        sel = [pairs[0], before[-1], pairs[-1]]
+        chosen[cond.cell] = [(r, e) for r, e, _, _ in sel]
+        av = axs[r_, 0]
+        for c, ((r, e_r, j, _), (_, col)) in enumerate(zip(sel, RPT_ROLES)):
+            q_r, v_r = data.load_rpt_discharge(cond, data_dir, r)
+            s_r, s_m, v_m = q_r / q_r.max(), curves[j]["q"] / curves[j]["q"].max(), curves[j]["v"]
+            keep = s_m >= trim  # the model's first ~1 % is the step-start transient
+            av.plot(s_r, v_r, color=col, lw=1.2, label=f"RPT{r}, {e_r:.0f} EFC")
+            av.plot(s_m[keep], v_m[keep], "--", color=col, lw=1.0)
+            ad = axs[r_, c + 1]
+            for (x, d), kw in ((an.smooth_dvdsoc(s_r, v_r), dict(color="black", lw=1.2)),
+                               (an.smooth_dvdsoc(s_m[keep], v_m[keep]), dict(color=col, lw=1.1, ls="--"))):
+                ad.plot(x[x >= DVDSOC_FROM], d[x >= DVDSOC_FROM], **kw)
+            ad.set_ylim(-2.6, 0)
+            if c:
+                ad.tick_params(labelleft=False)
+            style.panel_label(ad, 4 * r_ + c + 1, f"RPT{r}")
+        av.set_ylabel("Terminal voltage [V]")
+        axs[r_, 1].set_ylabel("dV/dSoC [V]")
+        av.legend(loc="lower left", title=ablations.cond_tag(cond), title_fontsize=7, fontsize=7)
+        style.panel_label(av, 4 * r_)
+    for a in axs[-1]:
+        a.set_xlabel("Depth of discharge [-]")
+    fig.legend(handles=[Line2D([], [], color="0.3", lw=1.2, label="Measured (dV/dSoC: black)"),
+                        Line2D([], [], color="0.3", ls="--", lw=1.1, label="Model")]
+               + [Line2D([], [], color=c, lw=1.2, label=lab) for lab, c in RPT_ROLES],
+               loc="outside upper center", ncol=5, frameon=False)
+    return fig, chosen
+
+
+# ---------------------------------------------------------------------------
 # Parameterisation: beginning-of-life fit
 # ---------------------------------------------------------------------------
 BOL_DVDQ_WINDOW = {"discharge": (0.02, 0.95), "charge": (0.05, 0.98)}  # normalised capacity scored
