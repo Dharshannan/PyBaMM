@@ -344,11 +344,16 @@ def partial_windows(data_dir, results_dir):
 # ---------------------------------------------------------------------------
 # Parameterisation: beginning-of-life fit
 # ---------------------------------------------------------------------------
+BOL_DVDQ_WINDOW = {"discharge": (0.02, 0.95), "charge": (0.05, 0.98)}  # normalised capacity scored
+
+
 def bol_fit(data_dir, results_dir, key="25deg_full_soc", rpt=1, trim=0.01):
     """Model against measured C/20 discharge (left) and constant-current C/20 charge (right) at the reference
     RPT of CELL064: voltage (top) and dV/dQ (bottom) against capacity. The model curves are the formation of
     the paper run (simulate.bol_curves), cached in results_dir. Returns (figure, {kind: (RMSE [mV], model
-    capacity [A h], measured capacity [A h])})."""
+    capacity [A h], measured capacity [A h], dV/dQ RMSE [V/(A h)])}). The RMSEs, shown in the panels, are
+    taken on a common grid of the capacity normalised by each curve's own; dV/dQ away from the steep end of
+    each step (BOL_DVDQ_WINDOW)."""
     from . import simulate  # pybamm import only when this figure is made
     cond = CONDITIONS[key]
     cache = os.path.join(results_dir, f"{key}_bol_curves.npz")
@@ -366,13 +371,23 @@ def bol_fit(data_dir, results_dir, key="25deg_full_soc", rpt=1, trim=0.01):
         q_m, v_m = q_m[keep], v_m[keep]
         ax[0, c].plot(q_r, v_r, color="black", lw=1.3, label="Measured")
         ax[0, c].plot(q_m, v_m, "--", color=plots.C_MODEL, lw=1.2, label="Model")
+        dvdq = []
         for q, v, kw in ((q_r, v_r, dict(color="black", lw=1.3)), (q_m, v_m, dict(color=plots.C_MODEL, lw=1.2, ls="--"))):
             x, d = an.smooth_dvdsoc(q / q.max(), v)  # binned on a uniform grid, then differentiated
             ax[1, c].plot(x * q.max(), d / q.max(), **kw)
+            dvdq.append((x, d / q.max()))
         ax[1, c].set_xlabel(f"{kind.capitalize()} capacity, C/20 [A h]")
-        x = np.linspace(0.02, 0.98, 200)  # voltage RMSE on a common grid of the normalised capacity
-        rmse = np.sqrt(np.mean((np.interp(x, q_m / q_m.max(), v_m) - np.interp(x, q_r / q_r.max(), v_r)) ** 2))
-        stats[kind] = (1e3 * rmse, float(q_m.max()), float(q_r.max()))
+        x = np.linspace(0.02, 0.98, 200)
+        rmse_v = np.sqrt(np.mean((np.interp(x, q_m / q_m.max(), v_m) - np.interp(x, q_r / q_r.max(), v_r)) ** 2))
+        (x_r, d_r), (x_m, d_m) = dvdq
+        lo, hi = BOL_DVDQ_WINDOW[kind]
+        sel = (x_r >= max(lo, x_m.min())) & (x_r <= min(hi, x_m.max()))
+        rmse_d = np.sqrt(np.mean((np.interp(x_r[sel], x_m, d_m) - d_r[sel]) ** 2))
+        stats[kind] = (1e3 * rmse_v, float(q_m.max()), float(q_r.max()), rmse_d)
+        where = dict(discharge=(0.97, 0.95, "right", "top"), charge=(0.03, 0.95, "left", "top"))[kind]
+        ax[0, c].text(*where[:2], f"RMSE {1e3 * rmse_v:.0f} mV", transform=ax[0, c].transAxes, ha=where[2], va=where[3])
+        ax[1, c].text(0.03 if kind == "discharge" else 0.97, 0.95, f"RMSE {rmse_d:.3f} V A$^{{-1}}$ h$^{{-1}}$",
+                      transform=ax[1, c].transAxes, ha="left" if kind == "discharge" else "right", va="top")
     ax[1, 0].set_ylim(-1.0, 0.1)
     ax[1, 1].set_ylim(0.0, 1.1)
     ax[0, 0].set_ylabel("Terminal voltage [V]")
