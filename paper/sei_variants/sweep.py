@@ -23,7 +23,7 @@ VARIANTS = {
                            values=[1.25e-23, 2.5e-23, 5e-23, 1e-22, 2.5e-22, 5e-22, 1e-21, 2e-21]),
     "kinetic_both": dict(sei=("ec reaction limited", "ec reaction limited"),
                          param="si_sei_k", prefix="k",
-                         values=[1e-16, 3e-16, 1e-15, 3e-15]),
+                         values=[3e-17, 6e-17, 1e-16, 2e-16, 3e-16, 5e-16, 1e-15, 3e-15]),
 }
 
 
