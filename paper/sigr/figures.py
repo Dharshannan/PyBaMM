@@ -450,6 +450,57 @@ def rpt_selection(data_dir, results_dir, trim=0.01):
 
 
 # ---------------------------------------------------------------------------
+# Graphical abstract (ECS: a single image, uploaded separately as GA*.png)
+# ---------------------------------------------------------------------------
+def graphical_abstract(data_dir, results_dir):
+    """The mechanism chain (left) and the four cells with one parameter set (right: C/20 SoH and Si LAM, model
+    against measured)."""
+    fig = plt.figure(figsize=(style.DOUBLE_IN, 3.6))
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.2, 1], left=0.005, right=0.985, top=0.87, bottom=0.21, wspace=0.3,
+                          hspace=0.12)
+    ax = fig.add_subplot(gs[:, 0])
+    ax.axis("off")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    route_a, route_b, sei, iso = "#dce9f7", "#e0f2e0", "#f3ead9", "#f8dcdc"
+    _box(ax, 0.0, 0.79, 0.47, 0.19, [("Full window", 8), ("Paris cracking", 8), ("(diffusion stress)", 7.5)], fc=route_a)
+    _box(ax, 0.53, 0.79, 0.47, 0.19, [("Partial windows", 8), ("Volume-strain", 8), ("fatigue cracking", 8)], fc=route_b)
+    _box(ax, 0.1, 0.53, 0.8, 0.15, [("SEI on fresh crack faces", 8), ("fills the pores", 8)], fc=sei)
+    _box(ax, 0.1, 0.27, 0.8, 0.15, [("Pores close: the gate opens,", 8), ("Si isolated with its lithium", 8)], fc=iso)
+    _box(ax, 0.25, 0.04, 0.5, 0.12, [("Capacity knee", 8.5)], fc="white")
+    _arrow(ax, 0.235, 0.79, 0.4, 0.68)
+    _arrow(ax, 0.765, 0.79, 0.6, 0.68)
+    _arrow(ax, 0.5, 0.53, 0.5, 0.42)
+    _arrow(ax, 0.5, 0.27, 0.5, 0.16)
+    fig.text(0.255, 0.965, "Two silicon degradation pathways", ha="center", va="top", fontsize=9, fontweight="bold")
+    ax_s = fig.add_subplot(gs[0, 1])
+    ax_l = fig.add_subplot(gs[1, 1], sharex=ax_s)
+    for key, cond in CONDITIONS.items():
+        col = CELL_COLOR[key]
+        res, _ = an.load(key, results_dir)
+        ax_s.plot(an.efc(res, res["rpt_thr"]), an.rpt_soh(res), "-", color=col, lw=1.2)
+        cap = data.load(cond, data_dir, "capacity_fade")
+        c20 = cap[cap["source"] == "C/20 RPT"]
+        ax_s.plot(c20["efc"], c20["capacity_retention_pct"], "o", ms=3.5, mfc="white", mec=col, mew=1.0)
+        m = an.life_mask(res)
+        ax_l.plot(an.efc(res, res["thr"])[m], res["LAM_si"][m], "-", color=col, lw=1.2)
+        lam = data.load(cond, data_dir, "LAM_derived")
+        ax_l.plot(lam["efc"], lam["LAM_NE_silicon_pct"], "s", ms=3.2, mfc="white", mec=col, mew=1.0)
+    ax_s.set_ylabel("SoH, C/20 [%]")
+    ax_l.set_ylabel("Si LAM [%]")
+    ax_l.set_xlabel(plots.EFC_LABEL)
+    ax_s.tick_params(labelbottom=False)
+    fig.text(0.79, 0.965, "One parameter set, four cells", ha="center", va="top", fontsize=9, fontweight="bold")
+    fig.legend(handles=[Line2D([], [], color=CELL_COLOR[k], lw=1.2, label=ablations.cond_tag(c).split(", ", 1)[1]
+                               + (" (predicted)" if c.window.startswith("20") else "")) for k, c in CONDITIONS.items()],
+               loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=4, fontsize=7.5, frameon=False, handlelength=1.4)
+    ax_l.legend(handles=[Line2D([], [], color="0.3", lw=1.2, label="Model"),
+                         Line2D([], [], color="0.3", ls="none", marker="s", ms=3.2, mfc="white",
+                                label="Measured (DMA)")], loc="upper left", fontsize=7)
+    return fig
+
+
+# ---------------------------------------------------------------------------
 # Parameterisation: beginning-of-life fit
 # ---------------------------------------------------------------------------
 BOL_DVDQ_WINDOW = {"discharge": (0.02, 0.95), "charge": (0.05, 0.98)}  # normalised capacity scored
