@@ -20,6 +20,8 @@ ABBREV = [
     ("Electrochemical and Solid-State Letters", "Electrochem. Solid-State Lett."),
     ("Electrochimica Acta", "Electrochim. Acta"),
     ("Energy \\& Environmental Science", "Energy Environ. Sci."),
+    ("Fatigue \\& Fracture of Engineering Materials \\& Structures", "Fatigue Fract. Eng. Mater. Struct."),
+    ("Frontiers in Energy Research", "Front. Energy Res."),
     ("International Journal of Fatigue", "Int. J. Fatigue"),
     ("International Materials Reviews", "Int. Mater. Rev."),
     ("Journal of Applied Mechanics", "J. Appl. Mech."),
