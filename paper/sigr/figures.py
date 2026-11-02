@@ -485,7 +485,7 @@ def graphical_abstract(data_dir, results_dir, key_v="25deg_full_soc", trim=0.01)
     _arrow(ax, 0.783, 0.5, 0.813, 0.5)
     fig.text(0.5, 0.985, "Two silicon cracking routes, one isolation gate", ha="center", va="top", fontsize=9,
              fontweight="bold")
-    gs = fig.add_gridspec(2, 2, left=0.085, right=0.985, top=0.44, bottom=0.115, wspace=0.3, hspace=0.12)
+    gs = fig.add_gridspec(2, 2, left=0.085, right=0.985, top=0.44, bottom=0.14, wspace=0.3, hspace=0.12)
     ax_s = fig.add_subplot(gs[0, 0])
     ax_l = fig.add_subplot(gs[1, 0], sharex=ax_s)
     ax_v = fig.add_subplot(gs[0, 1])
@@ -534,7 +534,8 @@ def graphical_abstract(data_dir, results_dir, key_v="25deg_full_soc", trim=0.01)
              va="bottom", fontsize=9, fontweight="bold")
     fig.legend(handles=[Line2D([], [], color=CELL_COLOR[k], lw=1.2, label=ablations.cond_tag(c).split(", ", 1)[1])
                         for k, c in CONDITIONS.items()],
-               loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=4, fontsize=7.5, frameon=False, handlelength=1.4)
+               loc="lower center", bbox_to_anchor=((ax_l.get_position().x0 + ax_l.get_position().x1) / 2, 0.0),
+               ncol=2, fontsize=7.5, frameon=False, handlelength=1.4, columnspacing=1.5)
     return fig
 
 
