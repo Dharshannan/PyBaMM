@@ -485,11 +485,13 @@ def graphical_abstract(data_dir, results_dir, key_v="25deg_full_soc", trim=0.01)
     _arrow(ax, 0.783, 0.5, 0.813, 0.5)
     fig.text(0.5, 0.985, "Two silicon cracking routes, one isolation gate", ha="center", va="top", fontsize=9,
              fontweight="bold")
-    gs = fig.add_gridspec(2, 2, left=0.085, right=0.985, top=0.44, bottom=0.14, wspace=0.3, hspace=0.12)
-    ax_s = fig.add_subplot(gs[0, 0])
-    ax_l = fig.add_subplot(gs[1, 0], sharex=ax_s)
-    ax_v = fig.add_subplot(gs[0, 1])
-    ax_d = fig.add_subplot(gs[1, 1], sharex=ax_v)
+    # left column ends higher (the cell legend sits under it); the right one runs down to the figure bottom
+    gl = fig.add_gridspec(2, 1, left=0.085, right=0.476, top=0.44, bottom=0.14, hspace=0.12)
+    gr = fig.add_gridspec(2, 1, left=0.594, right=0.985, top=0.44, bottom=0.075, hspace=0.12, height_ratios=[1, 1.3])
+    ax_s = fig.add_subplot(gl[0])
+    ax_l = fig.add_subplot(gl[1], sharex=ax_s)
+    ax_v = fig.add_subplot(gr[0])
+    ax_d = fig.add_subplot(gr[1], sharex=ax_v)
     for key, cond in CONDITIONS.items():
         col = CELL_COLOR[key]
         res, _ = an.load(key, results_dir)
@@ -528,7 +530,7 @@ def graphical_abstract(data_dir, results_dir, key_v="25deg_full_soc", trim=0.01)
     ax_v.tick_params(labelbottom=False)
     ax_v.legend(loc="lower left", fontsize=7, handlelength=1.4)
     ax_d.legend(handles=[Line2D([], [], color="0.3", lw=1.2, label="Measured"),
-                         Line2D([], [], color="0.3", ls="--", lw=1.0, label="Model")], loc="lower left", fontsize=7)
+                         Line2D([], [], color="0.3", ls="--", lw=1.0, label="Model")], loc="lower center", ncol=2, fontsize=7)
     fig.text(0.285, 0.475, "One parameter set, four cells", ha="center", va="bottom", fontsize=9, fontweight="bold")
     fig.text(0.79, 0.475, ablations.cond_tag(cond).split(", ", 1)[1] + ": voltage and dV/dSoC", ha="center",
              va="bottom", fontsize=9, fontweight="bold")
