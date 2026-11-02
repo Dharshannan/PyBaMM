@@ -485,6 +485,8 @@ def graphical_abstract(data_dir, results_dir, key_v="25deg_full_soc", trim=0.01)
     _arrow(ax, 0.783, 0.5, 0.813, 0.5)
     fig.text(0.5, 0.985, "Two silicon cracking routes, one isolation gate", ha="center", va="top", fontsize=9,
              fontweight="bold")
+    fig.text(0.5, 0.947, "2.5 A h pouch cells: SiO–graphite anode (19 wt % SiO) | single-crystal NMC622 cathode",
+             ha="center", va="top", fontsize=7.5, style="italic", color="0.25")
     # left column ends higher (the cell legend sits under it); the right one runs down to the figure bottom
     gl = fig.add_gridspec(2, 1, left=0.085, right=0.476, top=0.44, bottom=0.14, hspace=0.12)
     gr = fig.add_gridspec(2, 1, left=0.594, right=0.985, top=0.44, bottom=0.075, hspace=0.12, height_ratios=[1, 1.3])
