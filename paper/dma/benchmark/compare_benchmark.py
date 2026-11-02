@@ -85,7 +85,8 @@ def modes(t):
     return pd.concat(out, ignore_index=True)
 
 
-def plot_modes(m):
+def plot_modes(m, variants=None, name="bench_modes"):
+    variants = variants or VARIANTS
     st = R._style()
     cells = list(C.FOLDERS)
     fig = plt.figure(figsize=(st.DOUBLE_IN, 7.6), layout="constrained")
@@ -95,7 +96,7 @@ def plot_modes(m):
         ax = rows[i].subplots(1, 4)
         rows[i].suptitle(R.TAG[cell], x=0.01, ha="left", fontsize=8, fontweight="bold")
         for j, (col, lab) in enumerate(R.MODES):
-            for k, (_, sty) in VARIANTS.items():
+            for k, (_, sty) in variants.items():
                 d = m[(m["cell"] == cell) & (m["variant"] == k) & (m["rpt"] >= 1)].sort_values("efc")  # from RPT1
                 ax[j].plot(d["efc"], d[col], lw=1.0, **sty)
             ax[j].axhline(0, color="k", lw=0.5)
@@ -104,17 +105,18 @@ def plot_modes(m):
                 ax[j].set_xlabel("EFC since RPT1 [-]")
             st.panel_label(ax[j], n)
             n += 1
-    fig.legend(handles=[Line2D([], [], label=lab, **sty) for lab, sty in VARIANTS.values()],
+    fig.legend(handles=[Line2D([], [], label=lab, **sty) for lab, sty in variants.values()],
                loc="outside upper center", ncol=2, frameon=False)
-    return st.save(fig, OUT, "bench_modes")[0]
+    return st.save(fig, OUT, name)[0]
 
 
-def plot_rmse(s):
+def plot_rmse(s, variants=None, name="bench_rmse"):
+    variants = variants or VARIANTS
     st = R._style()
     fig, ax = plt.subplots(1, 2, figsize=(st.DOUBLE_IN, 2.5), layout="constrained")
     order = [(c, r) for c in C.FOLDERS for r in sorted(s.loc[s["cell"] == c, "rpt"].unique())]
     x = np.arange(len(order))
-    for k, (lab, sty) in VARIANTS.items():
+    for k, (lab, sty) in variants.items():
         d = s[s["variant"] == k].set_index(["cell", "rpt"]).loc[order]
         ax[0].plot(x, d["rmse_V_mV"], lw=0.8, **sty)
         ax[1].plot(x, d["rmse_dVdQ"], lw=0.8, **sty)
@@ -125,27 +127,33 @@ def plot_rmse(s):
         a.set_xlabel("Cell–RPT")
     for i, a in enumerate(ax):
         st.panel_label(a, i)
-    fig.legend(handles=[Line2D([], [], label=lab, **sty) for lab, sty in VARIANTS.values()],
+    fig.legend(handles=[Line2D([], [], label=lab, **sty) for lab, sty in variants.values()],
                loc="outside upper center", ncol=2, frameon=False)
-    return st.save(fig, OUT, "bench_rmse")[0]
+    return st.save(fig, OUT, name)[0]
 
 
-def plot_examples(t, curves, picks=(("CELL064", 1), ("CELL064", 5), ("CELL009", 8), ("CELL026", 8))):
-    """Voltage (top) and dV/dQ (bottom) of selected RPTs: measured and the four fits."""
+def plot_examples(t, curves, picks=(("CELL064", 1), ("CELL064", 5), ("CELL009", 8), ("CELL026", 8)), variants=None,
+                  name="bench_examples", whole=False):
+    """Voltage (top) and dV/dQ (bottom) of selected RPTs: measured and the fits in `variants`; whole: over the
+    whole discharge, the dropped last 5 % shaded."""
+    variants = variants or VARIANTS
     st = R._style()
     hc = C.HalfCells(DATA)
     fig, ax = plt.subplots(2, len(picks), figsize=(st.DOUBLE_IN, 4.3), layout="constrained")
     for j, (cell, rpt) in enumerate(picks):
-        q, v, dvdq, _, _ = C.load_discharge(C.rpt_files(DATA, cell)[rpt])
-        ax[0, j].plot(q, v, color="k", lw=1.6)
-        ax[1, j].plot(q, dvdq, color="k", lw=1.6)
-        for k, (_, sty) in VARIANTS.items():
-            r = t[k][(t[k]["cell"] == cell) & (t[k]["rpt"] == rpt)].iloc[0]
-            vm = model_voltage(k, r, q, hc, curves)
-            s = {kk: vv for kk, vv in sty.items() if kk not in ("marker", "ms", "mfc")}
-            ax[0, j].plot(q, vm, lw=1.0, **s)
-            ax[1, j].plot(q, np.gradient(vm, q), lw=1.0, **s)
-        ax[1, j].set_ylim(np.percentile(dvdq, 2) - 0.3, max(0.05, dvdq.max() + 0.1))
+        if whole:
+            _whole_discharge_fits(ax[0, j], ax[1, j], t, curves, hc, cell, rpt, variants)
+        else:
+            q, v, dvdq, _, _ = C.load_discharge(C.rpt_files(DATA, cell)[rpt])
+            ax[0, j].plot(q, v, color="k", lw=1.6)
+            ax[1, j].plot(q, dvdq, color="k", lw=1.6)
+            for k, (_, sty) in variants.items():
+                r = t[k][(t[k]["cell"] == cell) & (t[k]["rpt"] == rpt)].iloc[0]
+                vm = model_voltage(k, r, q, hc, curves)
+                s = {kk: vv for kk, vv in sty.items() if kk not in ("marker", "ms", "mfc")}
+                ax[0, j].plot(q, vm, lw=1.0, **s)
+                ax[1, j].plot(q, np.gradient(vm, q), lw=1.0, **s)
+            ax[1, j].set_ylim(np.percentile(dvdq, 2) - 0.3, max(0.05, dvdq.max() + 0.1))
         ax[1, j].set_xlabel("Discharge capacity [A h]")
         st.panel_label(ax[0, j], 2 * j, f"{cell} RPT{rpt}")
         st.panel_label(ax[1, j], 2 * j + 1)
@@ -153,13 +161,15 @@ def plot_examples(t, curves, picks=(("CELL064", 1), ("CELL064", 5), ("CELL009", 
     ax[1, 0].set_ylabel("dV/dQ [V/A h]")
     fig.legend(handles=[Line2D([], [], color="k", lw=1.6, label="Measured")]
                + [Line2D([], [], label=lab, **{kk: vv for kk, vv in sty.items() if kk not in ("marker", "ms", "mfc")})
-                  for lab, sty in VARIANTS.values()], loc="outside upper center", ncol=3, frameon=False)
-    return st.save(fig, OUT, "bench_examples")[0]
+                  for lab, sty in variants.values()], loc="outside upper center", ncol=3, frameon=False)
+    return st.save(fig, OUT, name)[0]
 
 
-def plot_cell_fits(t, curves, cell):
-    """Every RPT of one cell: voltage (upper panel) and dV/dQ (lower panel), measured and the four
-    fits, with each fit's voltage RMSE; four RPTs per block of two rows."""
+def plot_cell_fits(t, curves, cell, variants=None, name="bench_fits", whole=False):
+    """Every RPT of one cell: voltage (upper panel) and dV/dQ (lower panel), measured and the fits in
+    `variants`, with each fit's voltage RMSE on the common window; four RPTs per block of two rows. whole: over
+    the whole discharge, the dropped last 5 % shaded."""
+    variants = variants or VARIANTS
     st = R._style()
     hc = C.HalfCells(DATA)
     rpts = sorted(t["old_def"].loc[t["old_def"]["cell"] == cell, "rpt"].astype(int))
@@ -170,18 +180,21 @@ def plot_cell_fits(t, curves, cell):
     k = 0
     for n, rpt in enumerate(rpts):
         av, ad = ax[2 * (n // ncol), n % ncol], ax[2 * (n // ncol) + 1, n % ncol]
-        q, v, dvdq, _, _ = C.load_discharge(C.rpt_files(DATA, cell)[rpt])
-        av.plot(q, v, color="k", lw=1.6)
-        ad.plot(q, dvdq, color="k", lw=1.6)
-        rm = []
-        for var, (_, sty) in VARIANTS.items():
-            r = t[var][(t[var]["cell"] == cell) & (t[var]["rpt"] == rpt)].iloc[0]
-            vm = model_voltage(var, r, q, hc, curves)
-            line = {kk: vv for kk, vv in sty.items() if kk not in ("marker", "ms", "mfc")}
-            av.plot(q, vm, lw=1.0, **line)
-            ad.plot(q, np.gradient(vm, q), lw=1.0, **line)
-            rm.append(f"{1e3 * np.sqrt(np.nanmean((vm - v) ** 2)):.1f}")
-        ad.set_ylim(np.percentile(dvdq, 2) - 0.3, max(0.05, dvdq.max() + 0.1))
+        if whole:
+            rm = [f"{x:.1f}" for x in _whole_discharge_fits(av, ad, t, curves, hc, cell, rpt, variants).values()]
+        else:
+            q, v, dvdq, _, _ = C.load_discharge(C.rpt_files(DATA, cell)[rpt])
+            av.plot(q, v, color="k", lw=1.6)
+            ad.plot(q, dvdq, color="k", lw=1.6)
+            rm = []
+            for var, (_, sty) in variants.items():
+                r = t[var][(t[var]["cell"] == cell) & (t[var]["rpt"] == rpt)].iloc[0]
+                vm = model_voltage(var, r, q, hc, curves)
+                line = {kk: vv for kk, vv in sty.items() if kk not in ("marker", "ms", "mfc")}
+                av.plot(q, vm, lw=1.0, **line)
+                ad.plot(q, np.gradient(vm, q), lw=1.0, **line)
+                rm.append(f"{1e3 * np.sqrt(np.nanmean((vm - v) ** 2)):.1f}")
+            ad.set_ylim(np.percentile(dvdq, 2) - 0.3, max(0.05, dvdq.max() + 0.1))
         av.text(0.03, 0.04, "RMSE [mV]\n" + " / ".join(rm), transform=av.transAxes, ha="left", va="bottom",
                 fontsize=7)
         st.panel_label(av, k, f"RPT{rpt}")
@@ -196,8 +209,52 @@ def plot_cell_fits(t, curves, cell):
         ax[2 * b_ + 1, 0].set_ylabel("dV/dQ [V/A h]")
     fig.legend(handles=[Line2D([], [], color="k", lw=1.6, label="Measured")]
                + [Line2D([], [], label=lab, **{kk: vv for kk, vv in sty.items() if kk not in ("marker", "ms", "mfc")})
-                  for lab, sty in VARIANTS.values()], loc="outside upper center", ncol=3, frameon=False)
-    return st.save(fig, OUT, f"bench_fits_{cell}")[0]
+                  for lab, sty in variants.values()], loc="outside upper center", ncol=3, frameon=False)
+    return st.save(fig, OUT, f"{name}_{cell}")[0]
+
+
+def plot_window_full(t, curves, cell="CELL064", rpt=5):
+    """pyprobe-dma's fitted OCV on its SoC axis, trimmed against full curve (Si OCP deformed): both run from
+    V_min to V_max; the trimmed data end above 0 % SoC, the full-curve data at it."""
+    st = R._style()
+    fig, ax = plt.subplots(1, 2, figsize=(st.DOUBLE_IN, 2.7), layout="constrained", sharey=True)
+    d = pd.read_csv(C.rpt_files(DATA, cell)[rpt], usecols=["Q_discharge_Ah", "voltage_fit_used_V"])
+    for j, (k, (lab, sty)) in enumerate(FULL_STYLE.items()):
+        a = ax[j]
+        rn = t[k][(t[k]["cell"] == cell) & (t[k]["rpt"] == rpt)].iloc[0]
+        c, key, cap = curves[k], f"{cell}_{rpt}", rn["cell_capacity_Ah"]
+        a.plot(rn["soc_max"] - d["Q_discharge_Ah"] / cap, d["voltage_fit_used_V"], color="k", lw=1.0,
+               label="Measured (on the fit's SoC axis)")
+        a.plot(rn["soc_max"] - c[f"{key}_q"] / cap, c[f"{key}_ocv"], color=sty["color"], label="Fitted OCV")
+        a.plot([0, 1], LIMITS, "o", color=sty["color"], mfc="white", ms=4.5, label="SoC 0 / 100 %")
+        for lim in LIMITS:
+            a.axhline(lim, color="0.5", ls=":", lw=0.8)
+        a.set_xlabel("SoC [-]")
+        st.panel_label(a, j, lab.replace("pyprobe-dma, ", ""))
+    ax[0].set_ylabel("Voltage [V]")
+    ax[0].legend(loc="lower right", fontsize=7)
+    return st.save(fig, OUT, "full_window")[0]
+
+
+def plot_deformation_full(t):
+    """Fitted Si OCP scale and shift: full curve against trimmed (pyprobe-dma, Si OCP deformed)."""
+    st = R._style()
+    fig, ax = plt.subplots(1, 2, figsize=(st.DOUBLE_IN, 2.5), layout="constrained")
+    a, b = t["new_def"].set_index(["cell", "rpt"]), t["new_def_full"].set_index(["cell", "rpt"])
+    for cell, mk in zip(C.FOLDERS, ("o", "s", "^", "D")):
+        idx = [i for i in a.index if i[0] == cell]
+        ax[0].plot(a.loc[idx, "si_ocp_scale"], b.loc[idx, "si_ocp_scale"], mk, ms=4, label=cell, ls="none")
+        ax[1].plot(1e3 * a.loc[idx, "si_ocp_shift_V"], 1e3 * b.loc[idx, "si_ocp_shift_V"], mk, ms=4, ls="none")
+    for x, lab, lim in ((ax[0], "scale $a$ [-]", (0.74, 1.11)), (ax[1], "shift $b$ [mV]", (-105, 35))):
+        x.plot(lim, lim, color="0.5", lw=0.8)
+        x.set_xlim(lim)
+        x.set_ylim(lim)
+        x.set_xlabel(f"Trimmed {lab}")
+        x.set_ylabel(f"Full curve {lab}")
+    for i, x in enumerate(ax):
+        st.panel_label(x, i)
+    ax[0].legend(loc="lower right")  # the upper left holds a point on the scale bound
+    return st.save(fig, OUT, "full_deformation")[0]
 
 
 def plot_window(t, curves, cell="CELL064", rpt=5):
@@ -239,6 +296,35 @@ TRIM_STYLE = {  # trimmed against full-curve pyprobe-dma (Si OCP deformed), with
     "new_def_full": ("pyprobe-dma, full curve", dict(color="tab:red", ls="--", marker="^", ms=3.6, mfc="white")),
 }
 R_BOUNDS = (0.0, 0.3)  # pyprobe-dma's constant-resistance box [ohm]
+FULL_STYLE = {k: TRIM_STYLE[k] for k in ("new_def", "new_def_full")}  # the appendix: pyprobe-dma only
+
+
+def _whole_discharge_fits(av, ad, t, curves, hc, cell, rpt, variants):
+    """Measured voltage and dV/dQ over the whole discharge (uniform grid, the fits' Savitzky-Golay window) and
+    the fits in `variants` on it; the dropped last 5 % shaded. Returns {variant: voltage RMSE [mV] on the
+    common fit window}."""
+    q, v, dvdq, _, _ = C.load_discharge(C.rpt_files(DATA, cell)[rpt])
+    d = pd.read_csv(C.rpt_files(DATA, cell)[rpt], usecols=["Q_discharge_Ah", "voltage_fit_used_V"])
+    d = d.sort_values("Q_discharge_Ah").drop_duplicates("Q_discharge_Ah")
+    qa = np.linspace(0, d["Q_discharge_Ah"].max(), 1500)
+    va = np.interp(qa, d["Q_discharge_Ah"], d["voltage_fit_used_V"])
+    dq = qa[1] - qa[0]
+    n = int(C.SG_WINDOW_AH / dq) // 2 * 2 + 1
+    av.plot(qa, va, color="k", lw=1.6)
+    ad.plot(qa, savgol_filter(va, n, 3, deriv=1, delta=dq), color="k", lw=1.6)
+    rmse = {}
+    for k, (_, sty) in variants.items():
+        r = t[k][(t[k]["cell"] == cell) & (t[k]["rpt"] == rpt)].iloc[0]
+        line = {kk: vv for kk, vv in sty.items() if kk not in ("marker", "ms", "mfc")}
+        vm = model_voltage(k, r, qa, hc, curves)
+        ok = np.isfinite(vm)  # the trimmed pyprobe-dma curve stops at the end of its fit window
+        av.plot(qa, vm, lw=1.0, **line)
+        ad.plot(qa[ok], savgol_filter(vm[ok], n, 3, deriv=1, delta=dq), lw=1.0, **line)
+        rmse[k] = 1e3 * np.sqrt(np.nanmean((model_voltage(k, r, q, hc, curves) - v) ** 2))
+    for a in (av, ad):
+        a.axvspan(q.max(), qa.max(), color="0.88", lw=0)
+    ad.set_ylim(np.percentile(dvdq, 2) - 0.3, max(0.05, dvdq.max() + 0.1))
+    return rmse
 
 
 def plot_trim(t, curves, s, m, pick=("CELL064", 5)):
@@ -268,27 +354,10 @@ def plot_trim(t, curves, s, m, pick=("CELL064", 5)):
         a.set_xlabel("Cell–RPT")
     ax_e = mid.subplots(1, 2)
     cell, rpt = pick
-    q, v, dvdq, _, _ = C.load_discharge(C.rpt_files(DATA, cell)[rpt])
-    d = pd.read_csv(C.rpt_files(DATA, cell)[rpt], usecols=["Q_discharge_Ah", "voltage_fit_used_V"])
-    d = d.sort_values("Q_discharge_Ah").drop_duplicates("Q_discharge_Ah")
-    qa = np.linspace(0, d["Q_discharge_Ah"].max(), 1500)  # the whole discharge on a uniform grid
-    va = np.interp(qa, d["Q_discharge_Ah"], d["voltage_fit_used_V"])
-    n = int(C.SG_WINDOW_AH / (qa[1] - qa[0])) // 2 * 2 + 1  # the fits' Savitzky-Golay window
-    ga = savgol_filter(va, n, 3, deriv=1, delta=qa[1] - qa[0])
-    ax_e[0].plot(qa, va, color="k", lw=1.6)
-    ax_e[1].plot(qa, ga, color="k", lw=1.6)
-    for k, (_, sty) in TRIM_STYLE.items():
-        r = t[k][(t[k]["cell"] == cell) & (t[k]["rpt"] == rpt)].iloc[0]
-        line = {kk: vv for kk, vv in sty.items() if kk not in ("marker", "ms", "mfc")}
-        vm = model_voltage(k, r, qa, hc, curves)
-        ok = np.isfinite(vm)  # the trimmed pyprobe-dma curve stops at the end of its fit window
-        ax_e[0].plot(qa, vm, lw=1.0, **line)
-        ax_e[1].plot(qa[ok], savgol_filter(vm[ok], n, 3, deriv=1, delta=qa[1] - qa[0]), lw=1.0, **line)
-    for a in ax_e:
-        a.axvspan(q.max(), qa.max(), color="0.88", lw=0)
-        a.set_xlabel("Discharge capacity [A h]")
+    _whole_discharge_fits(ax_e[0], ax_e[1], t, curves, hc, cell, rpt, TRIM_STYLE)
     ax_e[0].text(0.985, 0.55, "dropped\nlast 5 %", transform=ax_e[0].transAxes, ha="right", fontsize=7)
-    ax_e[1].set_ylim(np.percentile(dvdq, 2) - 0.3, max(0.05, dvdq.max() + 0.1))
+    for a in ax_e:
+        a.set_xlabel("Discharge capacity [A h]")
     ax_e[0].set_ylabel("Voltage [V]")
     ax_e[1].set_ylabel("dV/dQ [V/A h]")
     ax_l = bot.subplots(1, len(C.FOLDERS))
@@ -364,6 +433,11 @@ def main():
     m.to_csv(os.path.join(OUT, "bench_modes.csv"), index=False)
     figs = [plot_modes(m), plot_rmse(s), plot_examples(t, curves), plot_window(t, curves), plot_deformation(t),
             plot_trim(t, curves, s, m)]
+    # trimmed against full curve, Si OCP deformed: every figure again
+    figs += [plot_rmse(s, FULL_STYLE, "full_rmse"), plot_modes(m, FULL_STYLE, "full_modes"),
+             plot_examples(t, curves, variants=FULL_STYLE, name="full_examples", whole=True),
+             plot_window_full(t, curves), plot_deformation_full(t)]
+    figs += [plot_cell_fits(t, curves, cell, FULL_STYLE, "full_fits", whole=True) for cell in C.FOLDERS]
     for f in figs + [plot_cell_fits(t, curves, cell) for cell in C.FOLDERS]:
         print(f)
     latex_table(t, s, m)
