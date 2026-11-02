@@ -452,29 +452,47 @@ def rpt_selection(data_dir, results_dir, trim=0.01):
 # ---------------------------------------------------------------------------
 # Graphical abstract (ECS: a single image, uploaded separately as GA*.png)
 # ---------------------------------------------------------------------------
-def graphical_abstract(data_dir, results_dir):
-    """The mechanism chain (left) and the four cells with one parameter set (right: C/20 SoH and Si LAM, model
-    against measured)."""
-    fig = plt.figure(figsize=(style.DOUBLE_IN, 3.6))
-    gs = fig.add_gridspec(2, 2, width_ratios=[1.2, 1], left=0.005, right=0.985, top=0.87, bottom=0.21, wspace=0.3,
-                          hspace=0.12)
-    ax = fig.add_subplot(gs[:, 0])
+GA_RPTS = (("RPT1", "black"), ("last RPT", "tab:red"))  # the two RPTs of the GA's voltage panels
+
+
+def graphical_abstract(data_dir, results_dir, key_v="25deg_full_soc", trim=0.01):
+    """Top: the mechanism chain with its key equations. Bottom: the four cells with one parameter set (C/20 SoH and
+    Si LAM, model against measured), and the C/20 voltage and dV/dSoC of one cell (key_v) at RPT1 and its last
+    RPT."""
+    fig = plt.figure(figsize=(style.DOUBLE_IN, 5.0))
+    ax = fig.add_axes((0.015, 0.555, 0.97, 0.36))
     ax.axis("off")
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    route_a, route_b, sei, iso = "#dce9f7", "#e0f2e0", "#f3ead9", "#f8dcdc"
-    _box(ax, 0.0, 0.79, 0.47, 0.19, [("Full window", 8), ("Paris cracking", 8), ("(diffusion stress)", 7.5)], fc=route_a)
-    _box(ax, 0.53, 0.79, 0.47, 0.19, [("Partial windows", 8), ("Volume-strain", 8), ("fatigue cracking", 8)], fc=route_b)
-    _box(ax, 0.1, 0.53, 0.8, 0.15, [("SEI on fresh crack faces", 8), ("fills the pores", 8)], fc=sei)
-    _box(ax, 0.1, 0.27, 0.8, 0.15, [("Pores close: the gate opens,", 8), ("Si isolated with its lithium", 8)], fc=iso)
-    _box(ax, 0.25, 0.04, 0.5, 0.12, [("Capacity knee", 8.5)], fc="white")
-    _arrow(ax, 0.235, 0.79, 0.4, 0.68)
-    _arrow(ax, 0.765, 0.79, 0.6, 0.68)
-    _arrow(ax, 0.5, 0.53, 0.5, 0.42)
-    _arrow(ax, 0.5, 0.27, 0.5, 0.16)
-    fig.text(0.255, 0.965, "Two silicon degradation pathways", ha="center", va="top", fontsize=9, fontweight="bold")
-    ax_s = fig.add_subplot(gs[0, 1])
-    ax_l = fig.add_subplot(gs[1, 1], sharex=ax_s)
+    route_a, route_b, sei, iso, knee = "#dce9f7", "#e0f2e0", "#f3ead9", "#f8dcdc", "#eeeeee"
+    _box(ax, 0.005, 0.56, 0.255, 0.43, [("A: Paris cracking", 8), ("(full window, diffusion stress)", 7),
+                                        (r"$\dot\ell_A \propto \left(\sigma_t\sqrt{\pi\ell}\right)^{m_{cr}}$", 8)],
+         fc=route_a)
+    _box(ax, 0.005, 0.01, 0.255, 0.43, [("B: volume-strain fatigue", 8), ("(partial windows, contraction)", 7),
+                                        (r"$\dot\ell_B = k_V\,\max(-\dot\varepsilon_V,0)\,\ell\,(1-\ell/R)$", 7.5)],
+         fc=route_b)
+    _box(ax, 0.305, 0.17, 0.235, 0.66, [("SEI on fresh crack faces", 8), ("fills the pores", 8),
+                                        (r"$\Lambda = 1 + 2\,\ell\,w_{cr}N_{cr}$", 8),
+                                        (r"$\varepsilon = \varepsilon_0 - a\left[\Delta L_{\mathrm{SEI}}"
+                                         r" + (\Lambda-1)\,L_{\mathrm{SEI,cr}}\right]$", 7.5)], fc=sei)
+    _box(ax, 0.585, 0.17, 0.19, 0.66, [("Pores close:", 8), ("the gate opens", 8),
+                                       (r"$h = \frac{\varepsilon-\varepsilon_{\min}}{\varepsilon_0-\varepsilon_{\min}}$", 8.5),
+                                       (r"$g^\ast = (1-h)^{\omega}$", 8)], fc=iso)
+    _box(ax, 0.82, 0.17, 0.175, 0.66, [("Si isolated with", 8), ("its lithium:", 8), ("capacity knee", 8),
+                                       (r"$\dot\Gamma = g^\ast$", 8),
+                                       (r"$\dot\varepsilon_{s,\mathrm{iso}} = k_{\mathrm{iso}}\,\Gamma\,\frac{a\,j_{\mathrm{SEI}}}{F}$", 8)],
+         fc=knee)
+    _arrow(ax, 0.268, 0.775, 0.3, 0.6)
+    _arrow(ax, 0.268, 0.225, 0.3, 0.4)
+    _arrow(ax, 0.548, 0.5, 0.578, 0.5)
+    _arrow(ax, 0.783, 0.5, 0.813, 0.5)
+    fig.text(0.5, 0.985, "Two silicon cracking routes, one isolation gate", ha="center", va="top", fontsize=9,
+             fontweight="bold")
+    gs = fig.add_gridspec(2, 2, left=0.085, right=0.985, top=0.44, bottom=0.115, wspace=0.3, hspace=0.12)
+    ax_s = fig.add_subplot(gs[0, 0])
+    ax_l = fig.add_subplot(gs[1, 0], sharex=ax_s)
+    ax_v = fig.add_subplot(gs[0, 1])
+    ax_d = fig.add_subplot(gs[1, 1], sharex=ax_v)
     for key, cond in CONDITIONS.items():
         col = CELL_COLOR[key]
         res, _ = an.load(key, results_dir)
@@ -490,13 +508,34 @@ def graphical_abstract(data_dir, results_dir):
     ax_l.set_ylabel("Si LAM [%]")
     ax_l.set_xlabel(plots.EFC_LABEL)
     ax_s.tick_params(labelbottom=False)
-    fig.text(0.79, 0.965, "One parameter set, four cells", ha="center", va="top", fontsize=9, fontweight="bold")
-    fig.legend(handles=[Line2D([], [], color=CELL_COLOR[k], lw=1.2, label=ablations.cond_tag(c).split(", ", 1)[1]
-                               + (" (predicted)" if c.window.startswith("20") else "")) for k, c in CONDITIONS.items()],
-               loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=4, fontsize=7.5, frameon=False, handlelength=1.4)
     ax_l.legend(handles=[Line2D([], [], color="0.3", lw=1.2, label="Model"),
                          Line2D([], [], color="0.3", ls="none", marker="s", ms=3.2, mfc="white",
                                 label="Measured (DMA)")], loc="upper left", fontsize=7)
+    cond = CONDITIONS[key_v]
+    res, curves = an.load(key_v, results_dir)
+    pairs = an.match_rpt_curves(res, curves, cond, data_dir)
+    for (r, e_r, j, _), (_, col) in zip((pairs[0], pairs[-1]), GA_RPTS):
+        q_r, v_r = data.load_rpt_discharge(cond, data_dir, r)
+        s_r, s_m, v_m = q_r / q_r.max(), curves[j]["q"] / curves[j]["q"].max(), curves[j]["v"]
+        keep = s_m >= trim  # the model's first ~1 % is the step-start transient
+        ax_v.plot(s_r, v_r, color=col, lw=1.2, label=f"RPT{r}, {e_r:.0f} EFC")
+        ax_v.plot(s_m[keep], v_m[keep], "--", color=col, lw=1.0)
+        for (x, d), ls in ((an.smooth_dvdsoc(s_r, v_r), "-"), (an.smooth_dvdsoc(s_m[keep], v_m[keep]), "--")):
+            ax_d.plot(x[x >= DVDSOC_FROM], d[x >= DVDSOC_FROM], color=col, lw=1.2 if ls == "-" else 1.0, ls=ls)
+    ax_d.set_ylim(-2.6, 0)
+    ax_v.set_ylabel("Voltage, C/20 [V]")
+    ax_d.set_ylabel("dV/dSoC [V]")
+    ax_d.set_xlabel("Depth of discharge [-]")
+    ax_v.tick_params(labelbottom=False)
+    ax_v.legend(loc="lower left", fontsize=7, handlelength=1.4)
+    ax_d.legend(handles=[Line2D([], [], color="0.3", lw=1.2, label="Measured"),
+                         Line2D([], [], color="0.3", ls="--", lw=1.0, label="Model")], loc="lower left", fontsize=7)
+    fig.text(0.285, 0.475, "One parameter set, four cells", ha="center", va="bottom", fontsize=9, fontweight="bold")
+    fig.text(0.79, 0.475, ablations.cond_tag(cond).split(", ", 1)[1] + ": voltage and dV/dSoC", ha="center",
+             va="bottom", fontsize=9, fontweight="bold")
+    fig.legend(handles=[Line2D([], [], color=CELL_COLOR[k], lw=1.2, label=ablations.cond_tag(c).split(", ", 1)[1]
+                               + (" (predicted)" if c.window.startswith("20") else "")) for k, c in CONDITIONS.items()],
+               loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=4, fontsize=7.5, frameon=False, handlelength=1.4)
     return fig
 
 
