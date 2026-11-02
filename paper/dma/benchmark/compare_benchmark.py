@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
+from scipy.signal import savgol_filter  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
@@ -232,6 +233,83 @@ def plot_window(t, curves, cell="CELL064", rpt=5):
     return st.save(fig, OUT, "bench_window")[0]
 
 
+TRIM_STYLE = {  # trimmed against full-curve pyprobe-dma (Si OCP deformed), with the PyProBE 2.6.1 reference
+    "old_def": ("PyProBE 2.6.1 (trimmed)", dict(color="tab:blue", ls="-", marker="o", ms=3.4)),
+    "new_def": ("pyprobe-dma, trimmed", dict(color="tab:orange", ls="-", marker="s", ms=3.4)),
+    "new_def_full": ("pyprobe-dma, full curve", dict(color="tab:red", ls="--", marker="^", ms=3.6, mfc="white")),
+}
+R_BOUNDS = (0.0, 0.3)  # pyprobe-dma's constant-resistance box [ohm]
+
+
+def plot_trim(t, curves, s, m, pick=("CELL064", 5)):
+    """Why the fit window is trimmed (Si OCP deformed): (a) voltage RMSE of every RPT on the common window and
+    (b) fitted resistance, trimmed against full curve; (c, d) one late-life RPT over the whole discharge, the
+    dropped last 5 % shaded; (e-h) Si LAM of each cell, with the PyProBE 2.6.1 fit as reference."""
+    st = R._style()
+    hc = C.HalfCells(DATA)
+    fig = plt.figure(figsize=(st.DOUBLE_IN, 6.6), layout="constrained")
+    top, mid, bot = fig.subfigures(3, 1, height_ratios=[1, 1, 0.9])
+    ax_r = top.subplots(1, 2)
+    order = [(c, r) for c in C.FOLDERS for r in sorted(s.loc[s["cell"] == c, "rpt"].unique())]
+    x = np.arange(len(order))
+    for k in ("new_def", "new_def_full"):
+        lab, sty = TRIM_STYLE[k]
+        d = s[s["variant"] == k].set_index(["cell", "rpt"]).loc[order]
+        ax_r[0].plot(x, d["rmse_V_mV"], lw=0.8, **sty)
+        rr = t[k].set_index(["cell", "rpt"]).reindex(order)["R_ohm"]
+        ax_r[1].plot(x, 1e3 * rr.to_numpy(), lw=0.8, **sty)
+    for b in R_BOUNDS:
+        ax_r[1].axhline(1e3 * b, color="0.5", ls=":", lw=0.8)
+    ax_r[0].set_yscale("log")
+    ax_r[0].set_ylabel("Voltage RMSE [mV]")
+    ax_r[1].set_ylabel(r"Fitted $R$ [m$\Omega$]")
+    for a in ax_r:
+        a.set_xticks(x, [f"{c[4:]}-{r}" for c, r in order], rotation=90, fontsize=7)
+        a.set_xlabel("Cell–RPT")
+    ax_e = mid.subplots(1, 2)
+    cell, rpt = pick
+    q, v, dvdq, _, _ = C.load_discharge(C.rpt_files(DATA, cell)[rpt])
+    d = pd.read_csv(C.rpt_files(DATA, cell)[rpt], usecols=["Q_discharge_Ah", "voltage_fit_used_V"])
+    d = d.sort_values("Q_discharge_Ah").drop_duplicates("Q_discharge_Ah")
+    qa = np.linspace(0, d["Q_discharge_Ah"].max(), 1500)  # the whole discharge on a uniform grid
+    va = np.interp(qa, d["Q_discharge_Ah"], d["voltage_fit_used_V"])
+    n = int(C.SG_WINDOW_AH / (qa[1] - qa[0])) // 2 * 2 + 1  # the fits' Savitzky-Golay window
+    ga = savgol_filter(va, n, 3, deriv=1, delta=qa[1] - qa[0])
+    ax_e[0].plot(qa, va, color="k", lw=1.6)
+    ax_e[1].plot(qa, ga, color="k", lw=1.6)
+    for k, (_, sty) in TRIM_STYLE.items():
+        r = t[k][(t[k]["cell"] == cell) & (t[k]["rpt"] == rpt)].iloc[0]
+        line = {kk: vv for kk, vv in sty.items() if kk not in ("marker", "ms", "mfc")}
+        vm = model_voltage(k, r, qa, hc, curves)
+        ok = np.isfinite(vm)  # the trimmed pyprobe-dma curve stops at the end of its fit window
+        ax_e[0].plot(qa, vm, lw=1.0, **line)
+        ax_e[1].plot(qa[ok], savgol_filter(vm[ok], n, 3, deriv=1, delta=qa[1] - qa[0]), lw=1.0, **line)
+    for a in ax_e:
+        a.axvspan(q.max(), qa.max(), color="0.88", lw=0)
+        a.set_xlabel("Discharge capacity [A h]")
+    ax_e[0].text(0.985, 0.55, "dropped\nlast 5 %", transform=ax_e[0].transAxes, ha="right", fontsize=7)
+    ax_e[1].set_ylim(np.percentile(dvdq, 2) - 0.3, max(0.05, dvdq.max() + 0.1))
+    ax_e[0].set_ylabel("Voltage [V]")
+    ax_e[1].set_ylabel("dV/dQ [V/A h]")
+    ax_l = bot.subplots(1, len(C.FOLDERS))
+    for j, c in enumerate(C.FOLDERS):
+        for k, (_, sty) in TRIM_STYLE.items():
+            dd = m[(m["cell"] == c) & (m["variant"] == k) & (m["rpt"] >= 1)].sort_values("efc")
+            ax_l[j].plot(dd["efc"], dd["LAM_Si"], lw=1.0, **sty)
+        ax_l[j].set_xlabel("EFC since RPT1 [-]")
+        ax_l[j].text(0.04, 0.96, R.TAG[c].replace(", ", "\n", 1), transform=ax_l[j].transAxes, ha="left", va="top",
+                     fontsize=7)
+    ax_l[0].set_ylabel("LAM, Si [%]")
+    n = 0
+    for a in [*ax_r, *ax_e, *ax_l]:
+        st.panel_label(a, n, f"{cell} RPT{rpt}" if a is ax_e[0] else None)
+        n += 1
+    fig.legend(handles=[Line2D([], [], color="k", lw=1.6, label="Measured")]
+               + [Line2D([], [], label=lab, **sty) for lab, sty in TRIM_STYLE.values()],
+               loc="outside upper center", ncol=4, frameon=False)
+    return st.save(fig, OUT, "bench_trim")[0]
+
+
 def plot_deformation(t):
     st = R._style()
     fig, ax = plt.subplots(1, 2, figsize=(st.DOUBLE_IN, 2.5), layout="constrained")
@@ -284,7 +362,8 @@ def main():
     s.to_csv(os.path.join(OUT, "bench_scores.csv"), index=False)
     m = modes(t)
     m.to_csv(os.path.join(OUT, "bench_modes.csv"), index=False)
-    figs = [plot_modes(m), plot_rmse(s), plot_examples(t, curves), plot_window(t, curves), plot_deformation(t)]
+    figs = [plot_modes(m), plot_rmse(s), plot_examples(t, curves), plot_window(t, curves), plot_deformation(t),
+            plot_trim(t, curves, s, m)]
     for f in figs + [plot_cell_fits(t, curves, cell) for cell in C.FOLDERS]:
         print(f)
     latex_table(t, s, m)
