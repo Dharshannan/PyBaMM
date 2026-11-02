@@ -509,6 +509,9 @@ def graphical_abstract(data_dir, results_dir, key_v="25deg_full_soc", trim=0.01)
     ax_l.set_ylabel("Si LAM [%]")
     ax_l.set_xlabel(plots.EFC_LABEL)
     ax_s.tick_params(labelbottom=False)
+    ax_s.legend(handles=[Line2D([], [], color="0.3", lw=1.2, label="Model"),
+                         Line2D([], [], color="0.3", ls="none", marker="o", ms=3.5, mfc="white",
+                                label="Measured")], loc="lower left", fontsize=7)
     ax_l.legend(handles=[Line2D([], [], color="0.3", lw=1.2, label="Model"),
                          Line2D([], [], color="0.3", ls="none", marker="s", ms=3.2, mfc="white",
                                 label="Measured (DMA)")], loc="upper left", fontsize=7)
