@@ -532,8 +532,8 @@ def graphical_abstract(data_dir, results_dir, key_v="25deg_full_soc", trim=0.01)
     fig.text(0.285, 0.475, "One parameter set, four cells", ha="center", va="bottom", fontsize=9, fontweight="bold")
     fig.text(0.79, 0.475, ablations.cond_tag(cond).split(", ", 1)[1] + ": voltage and dV/dSoC", ha="center",
              va="bottom", fontsize=9, fontweight="bold")
-    fig.legend(handles=[Line2D([], [], color=CELL_COLOR[k], lw=1.2, label=ablations.cond_tag(c).split(", ", 1)[1]
-                               + (" (predicted)" if c.window.startswith("20") else "")) for k, c in CONDITIONS.items()],
+    fig.legend(handles=[Line2D([], [], color=CELL_COLOR[k], lw=1.2, label=ablations.cond_tag(c).split(", ", 1)[1])
+                        for k, c in CONDITIONS.items()],
                loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=4, fontsize=7.5, frameon=False, handlelength=1.4)
     return fig
 
