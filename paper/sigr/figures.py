@@ -452,13 +452,10 @@ def rpt_selection(data_dir, results_dir, trim=0.01):
 # ---------------------------------------------------------------------------
 # Graphical abstract (ECS: a single image, uploaded separately as GA*.png)
 # ---------------------------------------------------------------------------
-GA_RPTS = (("RPT1", "black"), ("last RPT", "tab:red"))  # the two RPTs of the GA's voltage panels
-
-
 def graphical_abstract(data_dir, results_dir, key_v="25deg_full_soc", trim=0.01):
     """Top: the mechanism chain with its key equations. Bottom: the four cells with one parameter set (C/20 SoH and
-    Si LAM, model against measured), and the C/20 voltage and dV/dSoC of one cell (key_v) at RPT1 and its last
-    RPT."""
+    Si LAM, model against measured), and the C/20 voltage and dV/dSoC of one cell (key_v) at the three RPTs of
+    Fig. 9 (RPT_ROLES)."""
     fig = plt.figure(figsize=(style.DOUBLE_IN, 5.0))
     ax = fig.add_axes((0.015, 0.555, 0.97, 0.36))
     ax.axis("off")
@@ -514,7 +511,9 @@ def graphical_abstract(data_dir, results_dir, key_v="25deg_full_soc", trim=0.01)
     cond = CONDITIONS[key_v]
     res, curves = an.load(key_v, results_dir)
     pairs = an.match_rpt_curves(res, curves, cond, data_dir)
-    for (r, e_r, j, _), (_, col) in zip((pairs[0], pairs[-1]), GA_RPTS):
+    knee = data.knee_efc(cond, data_dir)
+    sel = [pairs[0], [p for p in pairs if p[1] < knee][-1], pairs[-1]]  # as Fig. 9: RPT1, last before the knee, last
+    for (r, e_r, j, _), (_, col) in zip(sel, RPT_ROLES):
         q_r, v_r = data.load_rpt_discharge(cond, data_dir, r)
         s_r, s_m, v_m = q_r / q_r.max(), curves[j]["q"] / curves[j]["q"].max(), curves[j]["v"]
         keep = s_m >= trim  # the model's first ~1 % is the step-start transient
