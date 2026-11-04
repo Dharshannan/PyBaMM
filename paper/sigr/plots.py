@@ -19,7 +19,10 @@ def _finish(ax, xlabel=EFC_LABEL):
 
 
 def soh(ax, res, cond, data_dir):
-    ax.plot(an.efc(res, res["age_thr"]), an.ageing_soh(res), "-", lw=1.0, color=C_MODEL, label="Model, C/3 ageing")
+    # full windows: the C/3 capacity on the C/20 reference (one denominator, as Wan2025 Fig. 2a); partial windows:
+    # the C/3 window capacity relative to the first, which the window sets
+    c3 = an.ageing_soh(res) if cond.partial else 100 * res["age_cap"] / an.soh_reference(res)
+    ax.plot(an.efc(res, res["age_thr"]), c3, "-", lw=1.0, color=C_MODEL, label="Model, C/3 ageing")
     ax.plot(an.efc(res, res["rpt_thr"]), an.rpt_soh(res), "^", ms=4, color=C_RPT, label="Model, C/20 RPT", zorder=5)
     cap = data.load(cond, data_dir, "capacity_fade")
     c20, sub = cap[cap["source"] == "C/20 RPT"], cap[cap["source"] != "C/20 RPT"]
