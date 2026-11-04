@@ -139,7 +139,7 @@ between 25 and 45 °C.
 
 **$E_Y$ caveat.** The isolation-LAM rate is $Y(T)\,|a\,j_{\mathrm{SEI}}(T)|$,
 and the SEI current has its own activation energy ($E_{\mathrm{SEI}}$ =
-35 kJ/mol). The 45 °C data therefore constrain the product's combined
+34.45 kJ/mol). The 45 °C data therefore constrain the product's combined
 temperature sensitivity. $E_Y$ and $E_{\mathrm{SEI}}$ would trade off if
 isolation were their only constraint. $E_{\mathrm{SEI}}$ is pinned
 separately by the pre-knee LLI, which reduces but does not remove the
@@ -164,12 +164,12 @@ trade-off.
 
 | Symbol | Parameter (code name) | v7 Si / Gr | Physical meaning | Status |
 |---|---|---|---|---|
-| $\varepsilon_{\min}$ | `Negative electrode porosity floor` | 0.035 | porosity at which electrolyte transport is cut off | physical in concept; value set by the fit |
+| $\varepsilon_{\min}$ | `Negative electrode porosity floor` | 0.0163 | porosity at which electrolyte transport is cut off | physical in concept; value set by the fit |
 | $\varepsilon_0$ | initial porosity | as built | starting porosity | physical (cell design) |
 | $\eta$ | `porosity-isolation LAM exponent` | 20 / 10 | how abruptly isolation sets in as headroom closes (stand-in for a percolation threshold) | empirical shape factor |
 | $\tau$ | `porosity-isolation gate time constant [s]` | 3.5e8 / 2e8 s | lag between pore closure and isolation | empirical; degenerate with $Y_0$, only $Y_0/\tau$ matters (§1.5) |
-| $Y_0$ | `SEI-redirect-to-LAM yield` | 0.25 / 0.025 | Si volume fraction lost per mole of redirected SEI lithium | lumped, fitted; carries m³/mol implicitly |
-| $E_Y$ | `V7["si_iso_E_Y"]` / `V7["gr_iso_E_Y"]` | 35 / 56.5 kJ/mol | temperature dependence of the yield | fitted |
+| $Y_0$ | `SEI-redirect-to-LAM yield` | 0.305 / 0.0227 | Si volume fraction lost per mole of redirected SEI lithium | lumped, fitted; carries m³/mol implicitly |
+| $E_Y$ | `V7["si_iso_E_Y"]` / `V7["gr_iso_E_Y"]` | 22 / 61.2 kJ/mol | temperature dependence of the yield | fitted |
 | $\theta$ | `isolation lithium trapping fraction` | 1.0 (Si) | how full the isolated particles are (1 = isolated at full lithiation) | physical meaning; the fit sits at the bound |
 
 ### 1.7 Physical or semi-empirical?
@@ -222,8 +222,8 @@ k_{\mathrm{iso}}(T) = k_{\mathrm{iso},0}\,\exp\!\left[\frac{E_Y}{R}\left(\frac{1
 k_{\mathrm{iso},0} \equiv \frac{Y_0}{\tau}
 $$
 
-v7: $k_{\mathrm{iso},0} = 0.25 / 3.5\times10^{8}\ \mathrm{s} \approx 7\times10^{-10}$
-(m³ mol⁻¹ s⁻¹ implicitly), with $E_Y$ = 35 kJ/mol (Si) unchanged. Two
+Shared set: $k_{\mathrm{iso},0} = 0.305 / 3.5\times10^{8}\ \mathrm{s} \approx 8.7\times10^{-10}$
+(m³ mol⁻¹ s⁻¹ implicitly), with $E_Y$ = 22 kJ/mol (Si) unchanged. Two
 identifiable constants ($k_{\mathrm{iso},0}$, $E_Y$) replace three
 ($Y_0$, $\tau$, $E_Y$).
 
@@ -268,10 +268,10 @@ $$
 = K\, g\, \frac{\varepsilon_s}{\varepsilon_{s,0}},
 \qquad
 K = \frac{Y\,|a\,j_{\mathrm{SEI}}|}{F\,\varepsilon_{s,0}}
-\approx \frac{0.25 \times 6\times10^{-5}}{0.058} \approx 3\times10^{-4}\ \mathrm{s^{-1}}
+\approx \frac{0.305 \times 4.9\times10^{-5}}{0.047} \approx 3\times10^{-4}\ \mathrm{s^{-1}}
 $$
 
-Here $|a\,j_{\mathrm{SEI}}|/F \approx 6\times10^{-5}$ mol m⁻³ s⁻¹: bulk Si
+Here $|a\,j_{\mathrm{SEI}}|/F \approx 4.9\times10^{-5}$ mol m⁻³ s⁻¹: bulk Si
 SEI grows by +0.26% of capacity between EFC 232 and 294, over an electrode
 volume of $2.9\times10^{-6}$ m³.
 
@@ -284,9 +284,8 @@ its floor:
 | 0.1 | 0.12 |
 | 0.05 | 0.36 |
 
-With $\varepsilon_0 = 0.17$ and $\varepsilon_{\min} = 0.035$, $g^*$ switches
-on below $\varepsilon \approx 0.048$. The run's porosity goes 0.068 → 0.038
-between EFC 232 and 294.
+With $\varepsilon_0 = 0.30$ and $\varepsilon_{\min} = 0.0163$, $g^*$ switches
+on below $\varepsilon \approx 0.045$ ($h \approx 0.1$).
 
 **2. Acceleration.** After closure, $g \approx \Delta t/\tau$, so
 
@@ -380,11 +379,11 @@ $$
 | $n_{\mathrm{BOL}}, n_{\mathrm{end}}$ | `volume change aging-deformation BOL/end exponent` | 1.56 → 2.19 | Si volume vs stoichiometry, steepening with LAM | fitted to expansion data (data-anchored) |
 | $R$ | Si particle radius | – | geometric cap | physical |
 
-Route A parameters (v7):
+Route A parameters (shared set):
 
 | Parameter | Value |
 |---|---|
-| $k_{cr,0}$ | 3.9e-20 × 1e3 × 0.85 = 3.315e-17 |
+| $k_{cr,0}$ | 2.709e-17 |
 | $E_{cr}$ | +90 kJ/mol |
 | $m_{cr}$ | 2.2 |
 | $b_{cr}$ | 1.12 |

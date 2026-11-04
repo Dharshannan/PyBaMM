@@ -2,13 +2,13 @@
 per-condition settings. Everything else is shared (parameters.py)."""
 from dataclasses import dataclass
 
-# Basis for C-rates and EFC [A.h]. The tests define both on the cells' 2.5 Ah
-# nominal capacity (C/3 = 0.833 A, EFC = throughput / (2 x 2.5 Ah)). The paper
-# runs use the model's own capacity, 2.5947 Ah (C/3 = 0.865 A, ~3.8% higher),
-# as in the published fit; set both to 2.5 for the test-protocol basis.
+# Basis for C-rates and EFC [A.h]: the cells' 2.5 Ah nominal capacity, as in
+# the tests (C/3 = 0.833 A, EFC = throughput / (2 x 2.5 Ah)). MODEL_CAPACITY_AH
+# is the model's own C/20 capacity at beginning of life, the basis of the LLI
+# and LAM percentages.
 MODEL_CAPACITY_AH = 2.5947
-RATE_BASIS_AH = MODEL_CAPACITY_AH
-EFC_BASIS_AH = MODEL_CAPACITY_AH
+RATE_BASIS_AH = 2.5
+EFC_BASIS_AH = 2.5
 
 UPPER_CUTOFF_V = 4.195
 LOWER_CUTOFF_V = 2.5
@@ -41,10 +41,10 @@ class Condition:
 CONDITIONS = {
     c.key: c
     for c in [
-        Condition("25deg_full_soc", "CELL064", "CELL064_25C_full", 298.15, "full SoC", 0.7, 5e-3, 152.0),
-        Condition("45deg_full_soc", "CELL017", "CELL017_45C", 318.15, "full SoC", 0.8, 3e-4, 318.853946),
-        Condition("25deg_15-95_soc", "CELL009", "CELL009_25C_15-95", 298.15, "15-95% SoC", 0.7, 1e-3, 298.1722359745961),
-        Condition("25deg_20-80_soc", "CELL026", "CELL026_25C_20-80", 298.15, "20-80% SoC", 0.7, 3e-4, 301.41566051398945),
+        Condition("25deg_full_soc", "CELL064", "CELL064_25C_full", 298.15, "full SoC", 0.7, 3.2e-2, 152.0),
+        Condition("45deg_full_soc", "CELL017", "CELL017_45C", 318.15, "full SoC", 0.8, 2.011e-4, 318.853946),
+        Condition("25deg_15-95_soc", "CELL009", "CELL009_25C_15-95", 298.15, "15-95% SoC", 0.7, 7.674e-4, 298.1722359745961),
+        Condition("25deg_20-80_soc", "CELL026", "CELL026_25C_20-80", 298.15, "20-80% SoC", 0.7, 4.475e-4, 301.41566051398945),
     ]
 }
 

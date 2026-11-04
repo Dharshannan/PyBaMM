@@ -42,3 +42,7 @@ sei_variants/runs/
 !sei_variants/figures/*/*.pdf
 !sei_variants/figures/*/*/*.png
 !sei_variants/figures/*/*/*.pdf
+
+# local-only refit runs (design-geometry diagnostics, refit candidates, expansion and k comparisons)
+outputs_geometry/
+refit_local/

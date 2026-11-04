@@ -1,10 +1,11 @@
-"""Model options and the shared parameter set ("v7") for all four conditions.
+"""Model options and the shared parameter set for all four conditions.
 
 Base set: ``si_gr_expansion`` (in the modified PyBaMM) with CELL064's
-beginning-of-life geometry, composition, OCPs and voltage window on top
-(from its RPT1 C/20 fit). The degradation parameters follow (V7). Only
-temperature, F0 and the pore-buffering width differ between conditions
-(conditions.py). The Arrhenius factors are written out exactly as fitted.
+beginning-of-life composition, OCPs and voltage window on top (from its RPT1
+C/20 fit), in the cells' design geometry (DESIGN below). The degradation
+parameters follow (V7). Only temperature, F0 and the pore-buffering width
+differ between conditions (conditions.py). The Arrhenius factors are written
+out exactly as fitted.
 Note the two sign conventions: crack-growth activation energies use
 exp[Ea/R (1/T - 1/T_ref)] (positive = slower when hot, as in Ai2020); all
 others use exp[Ea/R (1/T_ref - 1/T)] (positive = faster when hot).
@@ -53,37 +54,57 @@ MODEL_OPTIONS = {
 VAR_PTS = {"x_n": 5, "x_s": 5, "x_p": 5, "r_n_prim": 20, "r_n_sec": 20, "r_n": 20, "r_p": 20}
 
 # ---------------------------------------------------------------------------
-# Shared degradation parameters (v7). Values at T_REF; activation energies
-# [J/mol] give the temperature dependence.
-# v7 (2026-10-20) = v6 refitted on the corrected test protocols (25 degC RPTs,
-# C/20 RPT charge, CV to C/50): strain-fatigue constant x1.15 (2.3e-3 ->
-# 2.645e-3) and Paris crack-rate constant x0.85 (3.9e-17 -> 3.315e-17).
+# Design geometry [Wan2025 Table 2; Wan2026 Table S4]: the stack (5 double-sided
+# positive, 6 negative sheets) as one lumped electrode pair with the facing area
+# of the 10 positive faces (69 x 101 mm). Per-face thicknesses estimated from
+# the double-sided loadings at the stated 30 % porosity (the papers give none).
+# Every active phase keeps the solid volume of the BOL capacity fit (made in an
+# area-fitted geometry, BOL_FIT below), so capacities, particle areas and
+# particle fluxes are those of that fit: the volume fractions scale by the
+# ratio of the electrode volumes.
+# ---------------------------------------------------------------------------
+DESIGN = dict(area=10 * 0.069 * 0.101, height=0.065, L_n=52e-6, L_p=76e-6, pos_porosity=0.30)
+BOL_FIT = dict(width=0.52843063, L_n=85.2e-6, L_p=8.95119348e-05)  # geometry of the BOL capacity fit
+SOLID_SCALE_N = BOL_FIT["width"] * DESIGN["height"] * BOL_FIT["L_n"] / (DESIGN["area"] * DESIGN["L_n"])
+SOLID_SCALE_P = BOL_FIT["width"] * DESIGN["height"] * BOL_FIT["L_p"] / (DESIGN["area"] * DESIGN["L_p"])
+
+# Effective (porous) SEI: the SEI partial molar volume, EC diffusivity and initial thicknesses of the base set
+# times SEI_VOLUME_FACTOR, so the pores of the design geometry (porosity 0.30) fill to their floor with the
+# lithium consumption of the BOL-fit geometry; the SEI resistivity and the solvent diffusivities are scaled
+# with it in V7 (same resistance and same growth per unit lithium).
+SEI_VOLUME_FACTOR = 2.602
+
+# ---------------------------------------------------------------------------
+# Shared degradation parameters. Values at T_REF; activation energies [J/mol]
+# give the temperature dependence. Refitted 2026-11-04 in the design geometry
+# with the 2.5 Ah basis on all four cells (stress-LAM rates are absolute rates,
+# so they scale with the solid volume fractions).
 # ---------------------------------------------------------------------------
 V7 = dict(
     # Si cracking, route A (Paris law on the diffusion-induced surface stress)
-    si_crack_rate=3.9e-20 * 1.0e3 * 0.85, si_crack_Ea=90000.0,  # positive = slower when hot
+    si_crack_rate=2.709e-17, si_crack_Ea=90000.0,  # positive = slower when hot
     # Si cracking, route B (contraction-only strain fatigue)
     si_strain_kV=2.3e-3 * 1.15, si_strain_Ea=150000.0,  # positive = slower when hot
     # Si stress- and reaction-driven LAM
-    si_lam_beta=1.8468e-08, si_lam_Ea=40000.0, si_lam_m=2.5, si_critical_stress=6.0e6,
+    si_lam_beta=1.274e-08, si_lam_Ea=40000.0, si_lam_m=2.5, si_critical_stress=6.0e6,
     si_lam_damping_exponent=0.25, si_reaction_lam_factor=1e-7,
     # Si SEI (solvent-diffusion limited)
-    si_sei_solvent_diffusivity=1.25e-21, si_sei_Ea=35000.0, si_sei_k=3e-16,
+    si_sei_solvent_diffusivity=3.253e-21, si_sei_Ea=34450.0, si_sei_k=3e-16,
     # Porosity-gated isolation LAM, dose form: k_iso = Y0 exp[E_Y/R(1/T_ref - 1/T)] / tau
-    si_iso_exponent=20.0, si_iso_Y0=0.25, si_iso_E_Y=35000.0, si_iso_tau=3.5e8,
-    gr_iso_exponent=10.0, gr_iso_Y0=0.025, gr_iso_E_Y=56500.0, gr_iso_tau=2e8,
+    si_iso_exponent=20.0, si_iso_Y0=0.3054, si_iso_E_Y=22000.0, si_iso_tau=3.5e8,
+    gr_iso_exponent=10.0, gr_iso_Y0=0.0227, gr_iso_E_Y=61210.0, gr_iso_tau=2e8,
     si_iso_li_trapping=1.0,
     # Si aging deformation (fitted Si OCP deformation and volume-change law)
     si_ocp_deform_scale=0.8663, si_ocp_deform_shift=-0.00908,
     si_volume_exp_bol=1.561216606871758, si_volume_exp_end=2.18807468386046,
     # Graphite
-    gr_lam_beta=2.7804e-07, gr_lam_m=2.0, gr_critical_stress=3.0e7, gr_crack_rate=3.9e-21,
-    gr_sei_Ea=38000.0, gr_sei_k=6e-18, gr_sei_solvent_diffusivity=2.5e-22,  # D_sol used by the solvent-diffusion law only
+    gr_lam_beta=2.299e-07, gr_lam_m=2.0, gr_critical_stress=3.0e7, gr_crack_rate=3.9e-21,
+    gr_sei_Ea=32000.0, gr_sei_k=1.546e-17, gr_sei_solvent_diffusivity=6.506e-22,  # D_sol used by the solvent-diffusion law only
     # Positive electrode stress-driven LAM (saturating "power" damping)
-    pos_lam_beta=2.7778e-07 * 120, pos_lam_Ea=-55000.0, pos_lam_damping_exponent=50.0,
+    pos_lam_beta=1.922e-05, pos_lam_Ea=-55000.0, pos_lam_damping_exponent=50.0,
     # SEI, porosity, pore buffering
-    sei_resistivity=2e5, sei_exponent_cap=70.0, neg_porosity=0.17, neg_porosity_floor=0.035,
-    pore_closure_porosity=0.08,
+    sei_resistivity=7.686e4, sei_exponent_cap=70.0, neg_porosity=0.30, neg_porosity_floor=0.0163,
+    pore_closure_porosity=0.0793,
     # Other
     si_particle_radius=1.52e-6 * 0.2, neg_density=1745.4, c_e0=1000.0, si_diffusivity_mult=3.0,
 )
@@ -110,21 +131,26 @@ def _ocp_functions(data_dir):
 
 
 def base_parameter_values(data_dir):
-    """si_gr_expansion + CELL064's beginning-of-life cell data."""
+    """si_gr_expansion + CELL064's beginning-of-life cell data, in the design geometry."""
     graphite, si_lith, si_delith, si_avg, nmc = _ocp_functions(data_dir)
     values = si_gr_expansion_values()
+    pos_fraction = values["Positive electrode active material volume fraction"] * SOLID_SCALE_P
     values.update({
-        "Positive electrode thickness [m]": 8.95119348e-05,
-        "Electrode width [m]": 0.52843063,
+        "Electrode width [m]": DESIGN["area"] / DESIGN["height"],
+        "Electrode height [m]": DESIGN["height"],
+        "Negative electrode thickness [m]": DESIGN["L_n"],
+        "Positive electrode thickness [m]": DESIGN["L_p"],
+        "Positive electrode porosity": DESIGN["pos_porosity"],
+        "Positive electrode active material volume fraction": pos_fraction,
         "Cell cooling surface area [m2]": 0.00170857,
         "Cell volume [m3]": 7.7867e-06,
         "Nominal cell capacity [A.h]": MODEL_CAPACITY_AH,
         "Current function [A]": MODEL_CAPACITY_AH,
         "Negative electrode porosity": 0.35,
-        "Primary: Negative electrode active material volume fraction": 0.592132,
+        "Primary: Negative electrode active material volume fraction": 0.592132 * SOLID_SCALE_N,
         "Primary: Initial concentration in negative electrode [mol.m-3]": 25676.9209,
         "Primary: Negative electrode OCP [V]": graphite,
-        "Secondary: Negative electrode active material volume fraction": 0.0578685,
+        "Secondary: Negative electrode active material volume fraction": 0.0578685 * SOLID_SCALE_N,
         "Secondary: Initial concentration in negative electrode [mol.m-3]": 276020.0224,
         "Secondary: Negative electrode lithiation OCP [V]": si_lith,
         "Secondary: Negative electrode delithiation OCP [V]": si_delith,
@@ -136,6 +162,12 @@ def base_parameter_values(data_dir):
         "Initial concentration in negative electrode [mol.m-3]": 25676.9209,
         "Initial concentration in positive electrode [mol.m-3]": 262.5541,
     })
+    for name in ("Primary: SEI partial molar volume [m3.mol-1]", "Secondary: SEI partial molar volume [m3.mol-1]",
+                 "Primary: EC diffusivity [m2.s-1]", "Secondary: EC diffusivity [m2.s-1]",
+                 "Primary: Initial SEI thickness [m]", "Secondary: Initial SEI thickness [m]",
+                 "Primary: Initial SEI on cracks thickness [m]", "Secondary: Initial SEI on cracks thickness [m]",
+                 "Initial SEI thickness [m]"):
+        values[name] = values[name] * SEI_VOLUME_FACTOR
     return values
 
 

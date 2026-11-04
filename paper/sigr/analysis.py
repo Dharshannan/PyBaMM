@@ -35,10 +35,10 @@ def efc(res, thr):
 
 
 def soh_reference(res):
-    """Full windows: the first C/3 ageing discharge. Partial windows: the
-    conditioned C/20 reference RPT (as the data's RPT1)."""
+    """C/20 to C/20, as the data: the first C/20 RPT (the formation discharge).
+    Partial windows: the conditioned C/20 reference RPT (as the data's RPT1)."""
     i = int(res["soh_ref_index"])
-    return res["rpt_cap"][i] if i >= 0 and res["rpt_cap"].size > i else res["age_cap"][0]
+    return res["rpt_cap"][i if i >= 0 else 0]
 
 
 def rpt_soh(res):

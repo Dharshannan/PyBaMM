@@ -20,11 +20,12 @@ from . import ablations
 from . import analysis as an
 from . import data, plots, style
 from .conditions import CONDITIONS
+from .parameters import V7
 
 C_GR, C_SI, C_SEI, C_EL, C_ISO = "#8c8c8c", "#f39c34", "#7a4a1e", "#d6ecfa", "#c0392b"
 CELL_COLOR = {"25deg_full_soc": "tab:blue", "45deg_full_soc": "tab:red", "25deg_15-95_soc": "tab:green",
               "25deg_20-80_soc": "tab:purple"}
-EPS0, EPS_MIN = 0.17, 0.035  # initial and floor porosity of the negative electrode
+EPS0, EPS_MIN = V7["neg_porosity"], V7["neg_porosity_floor"]  # initial and floor porosity of the negative electrode
 
 
 # ---------------------------------------------------------------------------
@@ -626,7 +627,9 @@ def make_all(data_dir, results_dir, ablations_dir, out_dir, log=print, dma=None)
             "schematic_mech2": lambda: schematic_mech2(results_dir),
             "discussion_partial_windows": lambda: partial_windows(data_dir, results_dir),
             "bol_fit": lambda: bol_fit(data_dir, results_dir)[0],
-            "crack_comparison": lambda: crack_comparison(data_dir, results_dir)}
+            "crack_comparison": lambda: crack_comparison(data_dir, results_dir),
+            "rpt_selection": lambda: rpt_selection(data_dir, results_dir)[0],
+            "GA_graphical_abstract": lambda: graphical_abstract(data_dir, results_dir)}
     for folder, d in dma.items():
         figs[os.path.join(folder, "data_overview")] = lambda d=d: data_overview(d)
         if have_ablations:

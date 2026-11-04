@@ -7,10 +7,10 @@ parameter set covers four test conditions:
 
 | Condition | Cell | Temperature | SoC window | Per-condition settings |
 |---|---|---|---|---|
-| `25deg_full_soc` | CELL064 | 25 °C | full | F0 0.7, width 5e-3 |
-| `45deg_full_soc` | CELL017 | 45 °C | full | F0 0.8, width 3e-4 |
-| `25deg_15-95_soc` | CELL009 | 25 °C | 15–95% | F0 0.7, width 1e-3 |
-| `25deg_20-80_soc` | CELL026 | 25 °C | 20–80% | F0 0.7, width 3e-4 |
+| `25deg_full_soc` | CELL064 | 25 °C | full | F0 0.7, width 3.2e-2 |
+| `45deg_full_soc` | CELL017 | 45 °C | full | F0 0.8, width 2.011e-4 |
+| `25deg_15-95_soc` | CELL009 | 25 °C | 15–95% | F0 0.7, width 7.674e-4 |
+| `25deg_20-80_soc` | CELL026 | 25 °C | 20–80% | F0 0.7, width 4.475e-4 |
 
 - **F0** is the pore-buffering transmitted-fraction plateau.
 - **width** is the pore-buffering transition width, the one fitted
@@ -88,10 +88,9 @@ jupyter lab reproduce_paper.ipynb
 python tools/run_condition.py 25deg_full_soc --data data --out outputs
 ```
 
-**C-rate and EFC basis.** The paper runs use the model's capacity,
-2.5947 Ah, for both (C/3 = 0.865 A). The tests use the 2.5 Ah nominal
-capacity (C/3 = 0.833 A). Set `RATE_BASIS_AH` and `EFC_BASIS_AH` (or
-`--rate-basis-ah` / `--efc-basis-ah`) to 2.5 for the test-protocol basis.
+**C-rate and EFC basis.** As in the tests, both use the cells' 2.5 Ah
+nominal capacity (C/3 = 0.833 A; `RATE_BASIS_AH`, `EFC_BASIS_AH`, or
+`--rate-basis-ah` / `--efc-basis-ah`).
 
 **Ablations.** Each switches one mechanism off and keeps every other
 parameter at its fitted value (10 runs, about 1 h on 10 cores):
