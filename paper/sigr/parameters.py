@@ -100,8 +100,8 @@ V7 = dict(
     # Graphite
     gr_lam_beta=2.299e-07, gr_lam_m=2.0, gr_critical_stress=3.0e7, gr_crack_rate=3.9e-21,
     gr_sei_Ea=32000.0, gr_sei_k=1.546e-17, gr_sei_solvent_diffusivity=6.506e-22,  # D_sol used by the solvent-diffusion law only
-    # Positive electrode stress-driven LAM (saturating "power" damping)
-    pos_lam_beta=1.922e-05, pos_lam_Ea=-55000.0, pos_lam_damping_exponent=50.0,
+    # Positive electrode stress-driven LAM (linear damping: rises gradually; refitted 2026-11-04 for the early fade)
+    pos_lam_beta=9.61e-08, pos_lam_Ea=16000.0, pos_lam_damping_exponent=1.0,  # positive E_a = faster when hot
     # SEI, porosity, pore buffering
     sei_resistivity=7.686e4, sei_exponent_cap=70.0, neg_porosity=0.30, neg_porosity_floor=0.0163,
     pore_closure_porosity=0.0793,
