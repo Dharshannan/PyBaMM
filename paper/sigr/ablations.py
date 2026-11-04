@@ -34,6 +34,13 @@ ABLATIONS = {
         keys=["25deg_full_soc", "25deg_15-95_soc"],
         params={"si_iso_li_trapping": 0.0},
     ),
+    "gate_open": dict(
+        # gate exponents 0: g* = (1 - h)^0 = 1, so the dose grows from the first cycle; the isolation yields
+        # refitted on CELL064 (scan of x0.1-0.35 for Si, x0.1-0.3 for graphite on the shared values; best x0.1, x0.3)
+        description="Mechanism I without the porosity gate (g* = 1), isolation refitted on CELL064",
+        keys=["25deg_full_soc", "45deg_full_soc", "25deg_15-95_soc", "25deg_20-80_soc"],
+        params={"si_iso_exponent": 0.0, "gr_iso_exponent": 0.0, "si_iso_Y0": 0.03054, "gr_iso_Y0": 0.00681},
+    ),
 }
 
 
@@ -58,7 +65,8 @@ def run_ablations(data_dir, out_dir, names=None, max_workers=None, report_every_
 # Comparison with the full model
 # ---------------------------------------------------------------------------
 ABLATION_STYLE = {"no_isolation": ("tab:red", "--"), "no_strain_cracking": ("tab:purple", "-."),
-                  "strain_cracking_no_temperature": ("tab:green", ":"), "no_li_trapping": ("tab:cyan", "--")}
+                  "strain_cracking_no_temperature": ("tab:green", ":"), "no_li_trapping": ("tab:cyan", "--"),
+                  "gate_open": ("tab:orange", (0, (5, 1.5)))}
 
 
 def _available(out_dir, name, key):
@@ -98,7 +106,8 @@ def compare(data_dir, out_dir, baseline_dir):
 ABLATION_LABEL = {"no_isolation": "No isolation (mechanism I off)",
                   "no_strain_cracking": "No strain cracking (route B off)",
                   "strain_cracking_no_temperature": "Route B without temperature dependence",
-                  "no_li_trapping": r"No lithium trapping ($\theta$ = 0)"}
+                  "no_li_trapping": r"No lithium trapping ($\theta$ = 0)",
+                  "gate_open": r"No gate ($g^*$ = 1, refitted on CELL064)"}
 
 
 def figure(data_dir, out_dir, baseline_dir, keys=None):
