@@ -51,3 +51,6 @@ outputs_ablations_design_F1/
 outputs_ablations_design.log
 sei_variants/runs_paper_geometry/
 sei_variants/figures.log
+# Si lithiation-OCP charge check (Supplementary): figures kept
+!charge_branch/figures/*.png
+!charge_branch/figures/*.pdf
