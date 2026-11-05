@@ -47,6 +47,7 @@ MODEL_OPTIONS = {
     "pore buffering transition": "physical",
     "open-circuit potential aging deformation": (("false", "true"), "false"),
     "OCP aging deformation driver": "LAM fraction",
+    "OCP aging deformation branches": "delithiation",  # "both": also the lithiation branch (charge fits)
     "volume change aging deformation": (("false", "true"), "false"),
     "thermal": "isothermal",
 }
@@ -96,6 +97,8 @@ V7 = dict(
     si_iso_li_trapping=1.0,
     # Si aging deformation (fitted Si OCP deformation and volume-change law)
     si_ocp_deform_scale=0.8663, si_ocp_deform_shift=-0.00908,
+    # lithiation branch (used only with "OCP aging deformation branches": "both"; default off)
+    si_ocp_lith_deform_scale=1.0, si_ocp_lith_deform_shift=0.0,
     si_volume_exp_bol=1.561216606871758, si_volume_exp_end=2.18807468386046,
     # Graphite
     gr_lam_beta=2.299e-07, gr_lam_m=2.0, gr_critical_stress=3.0e7, gr_crack_rate=3.9e-21,
@@ -224,6 +227,8 @@ def parameter_values(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, p=V7):
         "Secondary: Negative electrode isolation lithium trapping fraction": p["si_iso_li_trapping"],
         "Secondary: Negative electrode OCP aging-deformation end scale": p["si_ocp_deform_scale"],
         "Secondary: Negative electrode OCP aging-deformation end shift [V]": p["si_ocp_deform_shift"],
+        "Secondary: Negative electrode OCP aging-deformation lithiation end scale": p["si_ocp_lith_deform_scale"],
+        "Secondary: Negative electrode OCP aging-deformation lithiation end shift [V]": p["si_ocp_lith_deform_shift"],
         "Secondary: Negative electrode volume change aging-deformation BOL exponent": p["si_volume_exp_bol"],
         "Secondary: Negative electrode volume change aging-deformation end exponent": p["si_volume_exp_end"],
         # --- graphite (primary phase) ---

@@ -16,6 +16,18 @@ def save(res, curves, key, out_dir):
     np.savez_compressed(os.path.join(out_dir, f"{key}_results.npz"), **res)
     pd.concat([pd.DataFrame({"rpt": i, "thr": c["thr"], "q": c["q"], "v": c["v"]})
                for i, c in enumerate(curves)]).to_csv(os.path.join(out_dir, f"{key}_rpt_curves.csv"), index=False)
+    chg = [(i, c) for i, c in enumerate(curves) if c.get("q_chg") is not None]
+    if chg:  # the CC part of the C/20 charge after each RPT discharge (same rpt index as the discharge)
+        pd.concat([pd.DataFrame({"rpt": i, "thr": c["thr"], "q": c["q_chg"], "v": c["v_chg"]})
+                   for i, c in chg]).to_csv(os.path.join(out_dir, f"{key}_rpt_charge_curves.csv"), index=False)
+
+
+def load_charge(key, out_dir):
+    """{rpt index: (Q from 0 [A.h], V [V])} of the model's C/20 CC charges, or None if not saved."""
+    path = os.path.join(out_dir, f"{key}_rpt_charge_curves.csv")
+    if not os.path.exists(path):
+        return None
+    return {int(i): (d["q"].to_numpy(), d["v"].to_numpy()) for i, d in pd.read_csv(path).groupby("rpt", sort=True)}
 
 
 def load(key, out_dir):

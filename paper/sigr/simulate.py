@@ -115,6 +115,22 @@ def rpt_discharge_curve(cyc):
     return best
 
 
+def rpt_charge_curve(cyc):
+    """Constant-current C/20-type charge of an RPT cycle: (Q from 0 [A.h], V [V]); the CV hold excluded."""
+    best_cap, best = 0.0, (None, None)
+    for step in getattr(cyc, "steps", []):
+        try:
+            current = step["Current [A]"].entries
+            q = step["Discharge capacity [A.h]"].entries
+            v = step["Terminal voltage [V]"].entries
+        except (KeyError, TypeError, AttributeError):
+            continue
+        if (current.size >= 2 and q.size >= 2 and -0.5 <= np.mean(current) < -0.05
+                and np.ptp(current) < 0.01 * abs(np.mean(current)) + 1e-6 and q[0] - q[-1] > best_cap):
+            best_cap, best = float(q[0] - q[-1]), (q[0] - q, v)
+    return best
+
+
 class _Collector:
     """Builds the compact results chunk by chunk, so only the current chunk's
     solution is ever held in memory. Per-cycle and per-RPT quantities are kept
@@ -155,7 +171,8 @@ class _Collector:
                 self.rpt_thr.append(thr_end)
                 q, v = rpt_discharge_curve(cyc)
                 if q is not None:
-                    self.curves.append(dict(thr=thr_end, q=q, v=v))
+                    q_c, v_c = rpt_charge_curve(cyc)
+                    self.curves.append(dict(thr=thr_end, q=q, v=v, q_chg=q_c, v_chg=v_c))
 
         thr = np.asarray(sol["Throughput capacity [A.h]"].entries, dtype=float)
         t = np.asarray(sol["Time [s]"].entries, dtype=float)
