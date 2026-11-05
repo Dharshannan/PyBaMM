@@ -663,6 +663,14 @@ class ParticleLithiumIonParameters(BaseParameters):
         self.ocp_aging_deform_shift = pybamm.Parameter(
             f"{pref}{Domain} electrode OCP aging-deformation end shift [V]"
         )
+        # Lithiation-branch counterparts, only referenced when "OCP aging
+        # deformation branches" is "both" (from the charge eSOH fits).
+        self.ocp_aging_deform_scale_lith = pybamm.Parameter(
+            f"{pref}{Domain} electrode OCP aging-deformation lithiation end scale"
+        )
+        self.ocp_aging_deform_shift_lith = pybamm.Parameter(
+            f"{pref}{Domain} electrode OCP aging-deformation lithiation end shift [V]"
+        )
         # Item 29 (volume-change aging deformation): CELL064's own Si
         # expansion fit (Si_Gr_Expansion_Precursor/Pouch_Data/cell064_data,
         # L/L0 = 1 + 3*sto^exponent, joint_estimation.py's

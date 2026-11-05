@@ -109,6 +109,12 @@ class BaseHysteresisOpenCircuitPotential(BaseOpenCircuitPotential):
             U_delith, U_delith_bulk = self._apply_ocp_aging_deformation(
                 variables, U_delith, U_delith_bulk
             )
+            # Optional: the lithiation branch too, with its own end
+            # scale/shift from the charge eSOH fits (same LAM-fraction ramp).
+            if self.options["OCP aging deformation branches"] == "both":
+                U_lith, U_lith_bulk = self._apply_ocp_aging_deformation(
+                    variables, U_lith, U_lith_bulk, branch="lithiation"
+                )
 
             H = U_lith - U_delith
 

@@ -66,7 +66,7 @@ class BaseOpenCircuitPotential(BaseInterface):
                 }
             )
 
-    def _apply_ocp_aging_deformation(self, variables, ocp_surf, ocp_bulk):
+    def _apply_ocp_aging_deformation(self, variables, ocp_surf, ocp_bulk, branch="delithiation"):
         """Item 25: aging-dependent OCP deformation (U_new = scale*U_base +
         shift), ramped by this phase's own LAM FRACTION (1 - eps_solid /
         eps_solid_BOL, clipped to [0, 1]) -- see lithium_ion_parameters.py's
@@ -104,6 +104,10 @@ class BaseOpenCircuitPotential(BaseInterface):
 
         phase_name = self.phase_name
 
+        if branch == "lithiation" and self.options["OCP aging deformation driver"] != "LAM fraction":
+            raise NotImplementedError(
+                "lithiation-branch OCP aging deformation needs the 'LAM fraction' driver"
+            )
         if self.options["OCP aging deformation driver"] == "throughput":
             # CELL064 investigation item 25 follow-up: the "LAM fraction"
             # driver below is monotonically non-decreasing by construction
@@ -139,8 +143,12 @@ class BaseOpenCircuitPotential(BaseInterface):
             return ocp_surf, ocp_bulk
 
         # Default driver: "LAM fraction"
-        end_scale = self.phase_param.ocp_aging_deform_scale
-        end_shift = self.phase_param.ocp_aging_deform_shift
+        if branch == "lithiation":
+            end_scale = self.phase_param.ocp_aging_deform_scale_lith
+            end_shift = self.phase_param.ocp_aging_deform_shift_lith
+        else:
+            end_scale = self.phase_param.ocp_aging_deform_scale
+            end_shift = self.phase_param.ocp_aging_deform_shift
         eps_solid_init = self.phase_param.epsilon_s
 
         eps_solid_surf = variables[

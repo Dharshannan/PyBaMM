@@ -237,6 +237,16 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 driven directly by elapsed EFC against the REMAINING
                 (monotonic) real per-RPT anchors instead of a proxy that
                 cannot reproduce them by construction.
+            * "OCP aging deformation branches" : str
+                Can be "delithiation" (default) or "both". Only referenced
+                when "open-circuit potential aging deformation" is "true"
+                and the phase has a hysteresis OCP. "delithiation" deforms
+                the delithiation branch only (the discharge eSOH fits).
+                "both" also deforms the lithiation branch with its own end
+                scale/shift ("...OCP aging-deformation lithiation end
+                scale" / "...lithiation end shift [V]", from the charge
+                eSOH fits) on the same LAM-fraction ramp. Only the
+                "LAM fraction" driver supports "both".
             * "volume change aging deformation" : str
                 Can be "false" (default) or "true". When "true" and "loss of
                 active material" includes "porosity isolation" for a phase,
@@ -526,6 +536,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "porosity isolation gate": ["lagged", "dose"],
             "open-circuit potential aging deformation": ["false", "true"],
             "OCP aging deformation driver": ["LAM fraction", "throughput"],
+            "OCP aging deformation branches": ["delithiation", "both"],
             "volume change aging deformation": ["false", "true"],
             "stress-driven LAM damping": ["linear", "power"],
             "particle cracking growth": [
@@ -641,6 +652,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "porosity isolation gate": "lagged",
             "open-circuit potential aging deformation": "false",
             "OCP aging deformation driver": "LAM fraction",
+            "OCP aging deformation branches": "delithiation",
             "volume change aging deformation": "false",
             "stress-driven LAM damping": "linear",
             "particle cracking growth": "Paris",
