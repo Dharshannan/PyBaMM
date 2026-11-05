@@ -8,6 +8,7 @@ manuscript/
 manuscript_overleaf/
 outputs_ablations/
 outputs_ablations_v7/
+outputs_ablations_design/
 outputs_protocol_fix/
 outputs_resweep/
 
@@ -46,3 +47,7 @@ sei_variants/runs/
 # local-only refit runs (design-geometry diagnostics, refit candidates, expansion and k comparisons)
 outputs_geometry/
 refit_local/
+outputs_ablations_design_F1/
+outputs_ablations_design.log
+sei_variants/runs_paper_geometry/
+sei_variants/figures.log

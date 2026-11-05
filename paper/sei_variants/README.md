@@ -30,3 +30,10 @@ Result (2026-10-28; kinetic sweep extended to 8 values 2026-10-29), mean |SoH ga
 - **Diffusion on both:** a D_sol,Gr large enough to supply the late graphite SEI grows it from the first cycle, which
   fills the pores early and brings the knees of the long-life cells forward. The smallest D leaves almost no graphite
   SEI: the fits are close, but the late fade is under-predicted (25 degC full window: 53.7 vs 50 % at the last RPT).
+
+Rerun 2026-11-05 with the adopted (design-geometry) set; runs in `runs/`, the previous ones in
+`runs_paper_geometry/`; `figures.py refit_local/runs/ADOPT2` compares against the adopted runs. D_sol,Gr values
+are the old ones x SEI_VOLUME_FACTOR (3.25e-23 ... 5.2e-21). Mean |SoH gap|: 2.8 pp for the adopted set,
+3.0-15.8 pp for `diffusion_both` (low D: 2.95 pp, but V RMSE 68 vs 76 mV, late fade under-predicted: CELL064
+53.2 vs 50 % at the last RPT), 7.4-66 pp for `kinetic_both` (best 1e-16; at 1e-16 CELL017 ends at 92 vs 56 %,
+at 2e-16 it is at 35 % by 334 EFC).

@@ -1,7 +1,10 @@
 """Figures and scores of the single-law SEI variants against the paper runs (results/: kinetic term on graphite,
 diffusion limit on silicon).
 
-    python paper/sei_variants/figures.py
+    python paper/sei_variants/figures.py [PAPER_RUNS]
+
+PAPER_RUNS: the runs of the model of the main text (default paper/results); pass the adopted set's folder
+(e.g. refit_local/runs/ADOPT2) when results/ is older than the sweeps.
 
 writes, for each variant with runs, figures/<variant>/compare_<cell>.png|pdf (SoH, graphite SEI, Si SEI, LLI),
 figures/<variant>/<value>/<cell>_overall_summary.png|pdf, and scores.csv for all of them (mean |SoH gap| at the
@@ -26,7 +29,7 @@ from sweep import KEYS, VARIANTS  # noqa: E402
 DATA = os.path.join(PAPER, "outputs", "dma_data", "dma_ours")  # our pyprobe-dma DMA, as in the paper
 RUNS = os.path.join(HERE, "runs")
 FIGS = os.path.join(HERE, "figures")
-PAPER_RUNS = os.path.join(PAPER, "results")
+PAPER_RUNS = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(PAPER, "results")
 TITLES = {"diffusion_both": r"Diffusion limit on both phases: $D_\mathrm{sol,Gr}$ in m$^2$ s$^{-1}$",
           "kinetic_both": r"Kinetic (EC) law on both phases: $k_\mathrm{SEI,Si}$ in m s$^{-1}$"}
 SYMBOL = {"diffusion_both": "D", "kinetic_both": "k"}
@@ -134,7 +137,7 @@ def si_figure(variant):
     handles, labels = ax[0][0].get_legend_handles_labels()
     h3, l3 = ax[0][3].get_legend_handles_labels()
     fig.legend(handles + h3[-1:], labels + l3[-1:], loc="outside lower center", ncol=6, fontsize=7,
-               title=TITLES[variant] + "; SEI in % of 2.59 A h (surface and crack faces)", title_fontsize=7)
+               title=TITLES[variant] + f"; SEI in % of {float(res['efc_basis_ah']):g} A h (surface and crack faces)", title_fontsize=7)
     return style.save(fig, FIGS, f"si_{variant}")[0]
 
 
