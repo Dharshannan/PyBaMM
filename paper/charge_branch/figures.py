@@ -168,7 +168,8 @@ def dod_figure(runs, meas, key, which, kind):
         return x[x >= start], d[x >= start]
     for i, (ax, ((r, e_r, q_r, v_r), _)) in enumerate(zip(axes.flat, p[0])):
         if kind == "voltage":
-            ax.plot(q_r / q_r.max(), v_r, color="black", lw=1.3, label="Measured")
+            sr = q_r >= start * q_r.max()
+            ax.plot(q_r[sr] / q_r.max(), v_r[sr], color="black", lw=1.3, label="Measured")
         else:
             ax.plot(*dvdsoc(q_r / q_r.max(), v_r), color="black", lw=1.3, label="Measured")
         for n, run in enumerate(runs):
@@ -178,7 +179,8 @@ def dod_figure(runs, meas, key, which, kind):
             q_m, v_m = run[key][idx][k]
             s_m = q_m / q_m.max()
             if kind == "voltage":
-                ax.plot(s_m, v_m, STYLES[n], color=COLORS[n], lw=1.1, label=LABELS[n])
+                sm = s_m >= start
+                ax.plot(s_m[sm], v_m[sm], STYLES[n], color=COLORS[n], lw=1.1, label=LABELS[n])
             else:
                 keep = s_m >= an.DVDSOC_TRIM
                 ax.plot(*dvdsoc(s_m[keep], v_m[keep]), STYLES[n], color=COLORS[n], lw=1.1, label=LABELS[n])

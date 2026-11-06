@@ -112,9 +112,10 @@ def rpt_dod(res, curves, cond, data_dir, kind="voltage", trim=0.01, model_label=
     for i, (ax, (r, e_r, j, e_m)) in enumerate(zip(axes.flat, pairs)):
         q_r, v_r = data.load_rpt_discharge(cond, data_dir, r)
         s_r, s_m, v_m = q_r / q_r.max(), curves[j]["q"] / curves[j]["q"].max(), curves[j]["v"]
-        if kind == "voltage":
-            ax.plot(s_r, v_r, color="black", lw=1.3, label="Measured")
-            ax.plot(s_m, v_m, "--", color=C_MODEL, lw=1.2, label=model_label)
+        if kind == "voltage":  # both from an.DVDSOC_FROM: the step-start transient not drawn
+            sr, sm = s_r >= an.DVDSOC_FROM, s_m >= an.DVDSOC_FROM
+            ax.plot(s_r[sr], v_r[sr], color="black", lw=1.3, label="Measured")
+            ax.plot(s_m[sm], v_m[sm], "--", color=C_MODEL, lw=1.2, label=model_label)
         else:  # the model's first ~1% DoD is the step-start transient; dropped, and both drawn from an.DVDSOC_FROM
             keep = s_m >= trim
             for (x, d), kw in ((_smooth_dvdsoc(s_r, v_r), dict(color="black", lw=1.3, label="Measured")),

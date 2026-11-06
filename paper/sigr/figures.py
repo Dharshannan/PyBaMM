@@ -427,8 +427,9 @@ def rpt_selection(data_dir, results_dir, trim=0.01):
             q_r, v_r = data.load_rpt_discharge(cond, data_dir, r)
             s_r, s_m, v_m = q_r / q_r.max(), curves[j]["q"] / curves[j]["q"].max(), curves[j]["v"]
             keep = s_m >= trim  # the model's first ~1 % is the step-start transient
-            av.plot(s_r, v_r, color=col, lw=1.2, label=f"RPT{r}, {e_r:.0f} EFC")
-            av.plot(s_m[keep], v_m[keep], "--", color=col, lw=1.0)
+            sv_r, sv_m = s_r >= DVDSOC_FROM, s_m >= DVDSOC_FROM  # voltage drawn from 3 % too, as dV/dSoC
+            av.plot(s_r[sv_r], v_r[sv_r], color=col, lw=1.2, label=f"RPT{r}, {e_r:.0f} EFC")
+            av.plot(s_m[sv_m], v_m[sv_m], "--", color=col, lw=1.0)
             ad = axs[r_, c + 1]
             for (x, d), kw in ((an.smooth_dvdsoc(s_r, v_r), dict(color="black", lw=1.2)),
                                (an.smooth_dvdsoc(s_m[keep], v_m[keep]), dict(color=col, lw=1.1, ls="--"))):
@@ -575,8 +576,10 @@ def bol_fit(data_dir, results_dir, key="25deg_full_soc", rpt=1, trim=0.01):
         q_m, v_m = z[f"{kind}_q"], z[f"{kind}_v"]
         keep = q_m >= trim * q_m.max()  # the model's first ~1 % is the step-start transient
         q_m, v_m = q_m[keep], v_m[keep]
-        ax[0, c].plot(q_r, v_r, color="black", lw=1.3, label="Measured")
-        ax[0, c].plot(q_m, v_m, "--", color=plots.C_MODEL, lw=1.2, label="Model")
+        f0 = DVDSOC_FROM if kind == "discharge" else 0.0  # the discharge drawn from 3 % (step-start transient)
+        sr, sm = q_r >= f0 * q_r.max(), q_m >= f0 * q_m.max()
+        ax[0, c].plot(q_r[sr], v_r[sr], color="black", lw=1.3, label="Measured")
+        ax[0, c].plot(q_m[sm], v_m[sm], "--", color=plots.C_MODEL, lw=1.2, label="Model")
         dvdq = []
         for q, v, kw in ((q_r, v_r, dict(color="black", lw=1.3)), (q_m, v_m, dict(color=plots.C_MODEL, lw=1.2, ls="--"))):
             x, d = an.smooth_dvdsoc(q / q.max(), v)  # binned on a uniform grid, then differentiated
