@@ -63,11 +63,13 @@ def rpt_voltage(ax, res, curves, cond, data_dir):
     efcs = an.efc(res, [c["thr"] for c in curves])
     norm = plt.Normalize(efcs.min(), efcs.max())
     cmap = plt.cm.viridis
-    for c, e in zip(curves, efcs):
-        ax.plot(c["q"], c["v"], color=cmap(norm(e)), lw=1.0)
+    for c, e in zip(curves, efcs):  # each curve from an.DVDSOC_FROM of its capacity: the step-start transient not drawn
+        show = c["q"] >= an.DVDSOC_FROM * c["q"].max()
+        ax.plot(c["q"][show], c["v"][show], color=cmap(norm(e)), lw=1.0)
     for r, e_r, j, e_m in an.match_rpt_curves(res, curves, cond, data_dir, max_gap=60.0):
         q, v = data.load_rpt_discharge(cond, data_dir, r)
-        ax.plot(q, v, color=cmap(norm(e_r)), ls="--", lw=1.0)
+        show = q >= an.DVDSOC_FROM * q.max()
+        ax.plot(q[show], v[show], color=cmap(norm(e_r)), ls="--", lw=1.0)
     ax.legend(handles=[Line2D([], [], color="0.3", label="Model"), Line2D([], [], color="0.3", ls="--", label="Measured")],
               loc="upper right")
     cax = ax.inset_axes([0.50, 0.735, 0.42, 0.045])  # just under the legend, top right (no curves there)
