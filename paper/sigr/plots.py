@@ -113,10 +113,12 @@ def rpt_dod(res, curves, cond, data_dir, kind="voltage", trim=0.01, model_label=
         if kind == "voltage":
             ax.plot(s_r, v_r, color="black", lw=1.3, label="Measured")
             ax.plot(s_m, v_m, "--", color=C_MODEL, lw=1.2, label=model_label)
-        else:  # the model's first ~1% DoD is the step-start transient; dropped
+        else:  # the model's first ~1% DoD is the step-start transient; dropped, and both drawn from an.DVDSOC_FROM
             keep = s_m >= trim
-            ax.plot(*_smooth_dvdsoc(s_r, v_r), color="black", lw=1.3, label="Measured")
-            ax.plot(*_smooth_dvdsoc(s_m[keep], v_m[keep]), "--", color=C_MODEL, lw=1.2, label=model_label)
+            for (x, d), kw in ((_smooth_dvdsoc(s_r, v_r), dict(color="black", lw=1.3, label="Measured")),
+                               (_smooth_dvdsoc(s_m[keep], v_m[keep]), dict(ls="--", color=C_MODEL, lw=1.2,
+                                                                            label=model_label))):
+                ax.plot(x[x >= an.DVDSOC_FROM], d[x >= an.DVDSOC_FROM], **kw)
             ax.set_ylim(-3, 0.5)
         style.panel_label(ax, i, f"RPT{r}, EFC {e_r:.0f}")
         if i == 0:

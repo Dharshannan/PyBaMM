@@ -161,11 +161,16 @@ def dod_figure(runs, meas, key, which, kind):
     fig, axes = plt.subplots(nrow, ncol, figsize=(width, 1.45 * nrow + 0.45), sharex=True, sharey=True,
                              squeeze=False, layout="constrained")
     idx = 2 if which == "discharge" else 3
+    start = an.DVDSOC_FROM if which == "discharge" else 0.0  # the discharge's step-start transient not drawn
+
+    def dvdsoc(s, v):
+        x, d = an.smooth_dvdsoc(s, v)
+        return x[x >= start], d[x >= start]
     for i, (ax, ((r, e_r, q_r, v_r), _)) in enumerate(zip(axes.flat, p[0])):
         if kind == "voltage":
             ax.plot(q_r / q_r.max(), v_r, color="black", lw=1.3, label="Measured")
         else:
-            ax.plot(*an.smooth_dvdsoc(q_r / q_r.max(), v_r), color="black", lw=1.3, label="Measured")
+            ax.plot(*dvdsoc(q_r / q_r.max(), v_r), color="black", lw=1.3, label="Measured")
         for n, run in enumerate(runs):
             k = dict((m[0], j) for m, j in p[n]).get(r)
             if k is None:
@@ -176,7 +181,7 @@ def dod_figure(runs, meas, key, which, kind):
                 ax.plot(s_m, v_m, STYLES[n], color=COLORS[n], lw=1.1, label=LABELS[n])
             else:
                 keep = s_m >= an.DVDSOC_TRIM
-                ax.plot(*an.smooth_dvdsoc(s_m[keep], v_m[keep]), STYLES[n], color=COLORS[n], lw=1.1, label=LABELS[n])
+                ax.plot(*dvdsoc(s_m[keep], v_m[keep]), STYLES[n], color=COLORS[n], lw=1.1, label=LABELS[n])
         if kind != "voltage":
             ax.set_ylim(*((-0.3, 2.5) if which == "charge" else (-3, 0.5)))
         style.panel_label(ax, i, f"RPT{r}, EFC {e_r:.0f}")

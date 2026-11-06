@@ -131,6 +131,8 @@ def voltage_rmse(res, curves, cond, data_dir):
 
 DVDSOC_TRIM = 0.01  # the model's first ~1% DoD is the step-start transient (dropped, as in the plots)
 DVDSOC_WINDOW = (0.02, 0.95)  # DoD range scored: excludes the end-of-discharge cliff
+DVDSOC_FROM = 0.03  # discharge dV/dSoC and dV/dQ drawn from 3 % DoD: the step-start transient (measured and model)
+#                     and the one-sided gradient at the edge of the binning
 
 
 def smooth_dvdsoc(soc, v, n_bins=120):

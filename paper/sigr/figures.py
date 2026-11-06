@@ -402,7 +402,7 @@ def crack_comparison(data_dir, results_dir, keys=("25deg_full_soc", "25deg_15-95
 # Results: C/20 voltage and dV/dSoC at three RPTs of each cell
 # ---------------------------------------------------------------------------
 RPT_ROLES = (("RPT1", "black"), ("last before the knee", "tab:blue"), ("last RPT", "tab:red"))
-DVDSOC_FROM = 0.03  # dV/dSoC drawn from 3 % depth of discharge (step-start transient, edge of the binning)
+DVDSOC_FROM = an.DVDSOC_FROM  # dV/dSoC drawn from 3 % depth of discharge (step-start transient, edge of the binning)
 
 
 def rpt_selection(data_dir, results_dir, trim=0.01):
@@ -580,7 +580,8 @@ def bol_fit(data_dir, results_dir, key="25deg_full_soc", rpt=1, trim=0.01):
         dvdq = []
         for q, v, kw in ((q_r, v_r, dict(color="black", lw=1.3)), (q_m, v_m, dict(color=plots.C_MODEL, lw=1.2, ls="--"))):
             x, d = an.smooth_dvdsoc(q / q.max(), v)  # binned on a uniform grid, then differentiated
-            ax[1, c].plot(x * q.max(), d / q.max(), **kw)
+            show = x >= (DVDSOC_FROM if kind == "discharge" else 0.0)  # the discharge's step-start transient not drawn
+            ax[1, c].plot(x[show] * q.max(), d[show] / q.max(), **kw)
             dvdq.append((x, d / q.max()))
         ax[1, c].set_xlabel(f"{kind.capitalize()} capacity, C/20 [A h]")
         x = np.linspace(0.02, 0.98, 200)
