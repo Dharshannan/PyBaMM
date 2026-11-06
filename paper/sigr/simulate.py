@@ -228,11 +228,13 @@ class _Collector:
         return res, self.curves
 
 
-def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, log=print, options=None, params=None):
+def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, log=print, options=None, params=None,
+        rpt_rest_min=0.0):
     """Simulate one condition; returns (results, rpt_curves) (see _Collector).
     Each chunk starts from the previous chunk's last state only (which is all
     PyBaMM uses to continue a run), so memory use stays flat over the run.
-    options / params: overrides of MODEL_OPTIONS / V7 (e.g. for ablations)."""
+    options / params: overrides of MODEL_OPTIONS / V7 (e.g. for ablations). rpt_rest_min: a rest before every
+    RPT C/20 discharge after formation (0, the paper protocol: the discharge follows the CV hold directly)."""
     model = pybamm.lithium_ion.DFN({**MODEL_OPTIONS, **(options or {})})
     param = parameter_values(cond, data_dir, rate_basis_ah, p={**V7, **(params or {})})
     solver = pybamm.IDAKLUSolver(root_tol=SOLVER_TOL, atol=SOLVER_TOL, rtol=SOLVER_TOL,
@@ -271,6 +273,9 @@ def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, 
         top = float(age[2].split("Hold at ")[1].split(" V")[0])
         cc = () if UPPER_CUTOFF_V - top < 0.1 else (f"Charge at C/3 until {UPPER_CUTOFF_V} V",)
         rpt = ("Rest for 10 minutes",) + cc + (f"Hold at {UPPER_CUTOFF_V} V until C/50",) + rpt
+    if rpt_rest_min:  # test only: relaxes the CV hold before the C/20 discharge
+        i = next(k for k, st in enumerate(rpt) if st.startswith(f"Discharge at {RPT_RATE}"))
+        rpt = rpt[:i] + (f"Rest for {rpt_rest_min:g} minutes",) + rpt[i:]
     log(f"{cond.label}: ageing cycle: " + " | ".join(age))
     log(f"{cond.label}: RPT cycle (at {RPT_TEMPERATURE_K - 273.15:.0f} degC): " + " | ".join(rpt))
     rpt_steps = at_rpt_temperature(rpt)
