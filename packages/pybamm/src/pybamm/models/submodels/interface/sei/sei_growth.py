@@ -270,7 +270,7 @@ class SEIGrowth(BaseModel):
             if self.reaction_loc == "x-average":
                 sto_av = pybamm.x_average(sto_av)
             opening = phase_param.crack_opening(sto_av)
-            j_sei = opening * j_sei
+            j_sei = phase_param.crack_face_sei_multiplier * opening * j_sei
             variables.update(
                 {
                     f"{Domain} electrode {self.phase_name}crack opening fraction": opening,

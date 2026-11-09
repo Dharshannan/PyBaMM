@@ -681,6 +681,10 @@ class ParticleLithiumIonParameters(BaseParameters):
         self.crack_closure_residual = pybamm.Parameter(
             f"{pref}{Domain} electrode crack closure residual opening"
         )
+        # scale of the crack-face SEI current only (the open crack faces), outer surface untouched
+        self.crack_face_sei_multiplier = pybamm.Parameter(
+            f"{pref}{Domain} electrode crack-face SEI rate multiplier"
+        )
         # "silicon crystallisation" (crystalline c-Li15Si4 fraction, after
         # Jiang et al. 2020): only referenced when the option is "true".
         self.cryst_rate = pybamm.Parameter(
