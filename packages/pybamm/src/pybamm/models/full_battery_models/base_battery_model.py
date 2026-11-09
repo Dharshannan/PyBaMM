@@ -247,6 +247,28 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 scale" / "...lithiation end shift [V]", from the charge
                 eSOH fits) on the same LAM-fraction ramp. Only the
                 "LAM fraction" driver supports "both".
+            * "crack closure" : str
+                Can be "false" (default) or "true". Only with "SEI on cracks".
+                "true" scales this phase's crack-face SEI current by an opening
+                fraction omega = omega_min + (1 - omega_min) / (1 + exp((sto - sto_cl)
+                / w)) of the phase's r-averaged stoichiometry sto: cracks formed on
+                contraction close as the particle re-expands (Beaulieu et al.,
+                Electrochem. Solid-State Lett. 4 (2001) A137), shutting electrolyte
+                out of the crack faces ("...crack closure stoichiometry",
+                "...crack closure width", "...crack closure residual opening").
+                Can be a per-phase 2-tuple.
+            * "silicon crystallisation" : str
+                Can be "false" (default) or "true". Only for a phase with a
+                hysteresis OCP. "true" adds a crystalline fraction phi of the
+                phase (c-Li15Si4, after Jiang et al., J. Electrochem. Soc. 167
+                (2020) 130533): it grows from a seed while the phase is deeply
+                lithiated (surface stoichiometry above "...crystallisation onset
+                stoichiometry"), d phi/dt = k_c (phi + phi_seed)(1 - phi), and is
+                consumed as the plateau sites (stoichiometry above "...crystalline
+                plateau end stoichiometry" x_t) delithiate, phi <= (sto - x_t)/(1 - x_t)
+                (relaxation rate "...crystal consumption rate constant [s-1]"). The
+                delithiation OCP becomes "...crystalline-blended delithiation OCP [V]"
+                (a function of stoichiometry and phi). Can be a per-phase 2-tuple.
             * "volume change aging deformation" : str
                 Can be "false" (default) or "true". When "true" and "loss of
                 active material" includes "porosity isolation" for a phase,
@@ -538,6 +560,8 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "OCP aging deformation driver": ["LAM fraction", "throughput"],
             "OCP aging deformation branches": ["delithiation", "both"],
             "volume change aging deformation": ["false", "true"],
+            "silicon crystallisation": ["false", "true"],
+            "crack closure": ["false", "true"],
             "stress-driven LAM damping": ["linear", "power"],
             "particle cracking growth": [
                 "Paris",
@@ -654,6 +678,8 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "OCP aging deformation driver": "LAM fraction",
             "OCP aging deformation branches": "delithiation",
             "volume change aging deformation": "false",
+            "silicon crystallisation": "false",
+            "crack closure": "false",
             "stress-driven LAM damping": "linear",
             "particle cracking growth": "Paris",
             "isolation lithium trapping": "false",
@@ -1128,6 +1154,8 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                         "particle cracking growth",
                         "isolation lithium trapping",
                         "volume change aging deformation",
+                        "silicon crystallisation",
+                        "crack closure",
                     ]
                     and isinstance(value, tuple)
                     and len(value) == 2

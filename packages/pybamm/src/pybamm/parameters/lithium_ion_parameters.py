@@ -671,6 +671,33 @@ class ParticleLithiumIonParameters(BaseParameters):
         self.ocp_aging_deform_shift_lith = pybamm.Parameter(
             f"{pref}{Domain} electrode OCP aging-deformation lithiation end shift [V]"
         )
+        # "crack closure": crack-face SEI only while the cracks are open.
+        self.crack_closure_sto = pybamm.Parameter(
+            f"{pref}{Domain} electrode crack closure stoichiometry"
+        )
+        self.crack_closure_width = pybamm.Parameter(
+            f"{pref}{Domain} electrode crack closure width"
+        )
+        self.crack_closure_residual = pybamm.Parameter(
+            f"{pref}{Domain} electrode crack closure residual opening"
+        )
+        # "silicon crystallisation" (crystalline c-Li15Si4 fraction, after
+        # Jiang et al. 2020): only referenced when the option is "true".
+        self.cryst_rate = pybamm.Parameter(
+            f"{pref}{Domain} electrode crystallisation rate constant [s-1]"
+        )
+        self.cryst_seed = pybamm.Parameter(
+            f"{pref}{Domain} electrode crystalline seed fraction"
+        )
+        self.cryst_onset_sto = pybamm.Parameter(
+            f"{pref}{Domain} electrode crystallisation onset stoichiometry"
+        )
+        self.cryst_plateau_sto = pybamm.Parameter(
+            f"{pref}{Domain} electrode crystalline plateau end stoichiometry"
+        )
+        self.cryst_consumption_rate = pybamm.Parameter(
+            f"{pref}{Domain} electrode crystal consumption rate constant [s-1]"
+        )
         # Item 29 (volume-change aging deformation): CELL064's own Si
         # expansion fit (Si_Gr_Expansion_Precursor/Pouch_Data/cell064_data,
         # L/L0 = 1 + 3*sto^exponent, joint_estimation.py's
@@ -924,6 +951,25 @@ class ParticleLithiumIonParameters(BaseParameters):
         elif self.domain == "positive":
             out.print_name = r"U_\mathrm{p}(c^\mathrm{surf}_\mathrm{s,p}, T)"
         return out
+
+    def U_delith_cryst(self, sto, phi, T):
+        """Delithiation OCP [V] blended with a crystalline fraction phi
+        ("silicon crystallisation"): the same clipping, entropic term and
+        asymptotes as U, with a two-input reference OCP."""
+        Domain = self.domain.capitalize()
+        tol = pybamm.settings.tolerances["U__c_s"]
+        sto_clipped = pybamm.maximum(pybamm.minimum(sto, 1 - tol), tol)
+        phi_clipped = pybamm.maximum(pybamm.minimum(phi, 1), 0)
+        inputs = {
+            f"{self.phase_prefactor}{Domain} particle stoichiometry": sto_clipped,
+            f"{self.phase_prefactor}{Domain} electrode crystalline fraction": phi_clipped,
+        }
+        u_ref = pybamm.FunctionParameter(
+            f"{self.phase_prefactor}{Domain} electrode crystalline-blended delithiation OCP [V]",
+            inputs,
+        )
+        u_ref = u_ref + (T - self.main_param.T_ref) * self.dUdT(sto_clipped)
+        return u_ref + U_asymptotes(sto)
 
     def dUdT(self, sto):
         """

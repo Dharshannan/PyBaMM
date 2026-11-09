@@ -15,6 +15,11 @@ class CurrentSigmoidOpenCircuitPotential(BaseHysteresisOpenCircuitPotential):
         )
         pybamm.citations.register("Ai2022")
 
+    def get_fundamental_variables(self):
+        if self._crystallisation_on():
+            return self._get_crystal_variables()
+        return {}
+
     def get_coupled_variables(self, variables):
         domain, Domain = self.domain_Domain
         domain_options = getattr(self.options, domain)
@@ -56,5 +61,10 @@ class CurrentSigmoidOpenCircuitPotential(BaseHysteresisOpenCircuitPotential):
 
         return variables
 
+    def set_rhs(self, variables):
+        if self._crystallisation_on():
+            self._set_crystal_rhs(variables)
+
     def set_initial_conditions(self, variables):
-        pass
+        if self._crystallisation_on():
+            self._set_crystal_initial_conditions(variables)

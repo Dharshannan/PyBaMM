@@ -71,6 +71,58 @@ class BaseHysteresisOpenCircuitPotential(BaseOpenCircuitPotential):
             )
         return variables
 
+    # ------------------------------------------------------------------
+    # "silicon crystallisation": crystalline fraction phi (c-Li15Si4)
+    # ------------------------------------------------------------------
+    def _crystallisation_on(self):
+        domain, _ = self.domain_Domain
+        phase_options = getattr(getattr(self.options, domain), self.phase)
+        return (
+            self.reaction == "lithium-ion main"
+            and phase_options["silicon crystallisation"] == "true"
+        )
+
+    def _get_crystal_variables(self):
+        domain, Domain = self.domain_Domain
+        phase_name = self.phase_name
+        phi = pybamm.Variable(
+            f"{Domain} electrode {phase_name}crystalline fraction",
+            domains={"primary": f"{domain} electrode", "secondary": "current collector"},
+        )
+        return {
+            f"{Domain} electrode {phase_name}crystalline fraction": phi,
+            f"X-averaged {domain} electrode {phase_name}crystalline fraction": pybamm.x_average(phi),
+        }
+
+    def _set_crystal_rhs(self, variables):
+        """d phi/dt = k_c (phi + phi_seed)(1 - phi) S(sto > sto_c) S(lithiating) - k_a max(phi - f_plateau, 0),
+        f_plateau = (sto - x_t)/(1 - x_t) clipped to [0, 1]: the crystal grows while the phase is
+        deeply lithiated and is consumed as its plateau sites delithiate (two-phase c-Li15Si4 ->
+        amorphous), as in Jiang et al. (2020)."""
+        domain, Domain = self.domain_Domain
+        phase_name = self.phase_name
+        p = self.phase_param
+        phi = variables[f"{Domain} electrode {phase_name}crystalline fraction"]
+        sto_surf, _, _, _ = self._get_stoichiometry_and_temperature(variables)
+        if sto_surf.domain != phi.domain:  # e.g. x-averaged particles: broadcast onto the electrode
+            sto_surf = pybamm.PrimaryBroadcast(sto_surf, [f"{domain} electrode"])
+        deep = pybamm.sigmoid(p.cryst_onset_sto, sto_surf, 400)
+        x_t = p.cryst_plateau_sto
+        f_plateau = pybamm.maximum(pybamm.minimum((sto_surf - x_t) / (1 - x_t), 1), 0)
+        # only while the phase is lithiating (charge and CV hold), as Jiang's nucleation step f3: not
+        # during the brief Li hand-over into Si at the start of a discharge under the current-sigmoid switch
+        current = variables["Total current density [A.m-2]"]
+        lithiation_current = -current if domain == "negative" else current
+        lithiating = pybamm.sigmoid(0, lithiation_current, 100)
+        grow = p.cryst_rate * (phi + p.cryst_seed) * (1 - phi) * deep * lithiating
+        consume = p.cryst_consumption_rate * pybamm.maximum(phi - f_plateau, 0)
+        self.rhs[phi] = grow - consume
+
+    def _set_crystal_initial_conditions(self, variables):
+        domain, Domain = self.domain_Domain
+        phi = variables[f"{Domain} electrode {self.phase_name}crystalline fraction"]
+        self.initial_conditions[phi] = pybamm.Scalar(0)
+
     def _get_coupled_variables(self, variables):
         domain, Domain = self.domain_Domain
         domain_options = getattr(self.options, domain)
@@ -106,6 +158,16 @@ class BaseHysteresisOpenCircuitPotential(BaseOpenCircuitPotential):
             # deformation here (pre-blend) instead of post-blend also
             # means the published "OCP hysteresis [V]" (H, below) reflects
             # the now-asymmetric gap correctly.
+            if self._crystallisation_on():
+                # delithiation branch blended with the crystalline fraction (before the aging
+                # deformation, which then acts on the blended curve)
+                phi = variables[f"{Domain} electrode {phase_name}crystalline fraction"]
+                phi_av = variables[f"X-averaged {domain} electrode {phase_name}crystalline fraction"]
+                phi_surf = phi
+                if sto_surf.domain != phi.domain:
+                    phi_surf = phi_av
+                U_delith = self.phase_param.U_delith_cryst(sto_surf, phi_surf, T)
+                U_delith_bulk = self.phase_param.U_delith_cryst(sto_bulk, phi_av, T_bulk)
             U_delith, U_delith_bulk = self._apply_ocp_aging_deformation(
                 variables, U_delith, U_delith_bulk
             )
