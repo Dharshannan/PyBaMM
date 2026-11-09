@@ -256,6 +256,8 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 Electrochem. Solid-State Lett. 4 (2001) A137), shutting electrolyte
                 out of the crack faces ("...crack closure stoichiometry",
                 "...crack closure width", "...crack closure residual opening").
+                "SEI and growth" also scales the crack growth rate (Paris and strain
+                fatigue) by omega: a crack held shut does not propagate.
                 Can be a per-phase 2-tuple.
             * "silicon crystallisation" : str
                 Can be "false" (default) or "true". Only for a phase with a
@@ -561,7 +563,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "OCP aging deformation branches": ["delithiation", "both"],
             "volume change aging deformation": ["false", "true"],
             "silicon crystallisation": ["false", "true"],
-            "crack closure": ["false", "true"],
+            "crack closure": ["false", "true", "SEI and growth"],
             "stress-driven LAM damping": ["linear", "power"],
             "particle cracking growth": [
                 "Paris",

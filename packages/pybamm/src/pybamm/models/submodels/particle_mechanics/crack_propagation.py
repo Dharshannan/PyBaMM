@@ -256,8 +256,16 @@ class CrackPropagation(BaseMechanics):
                 l_cr = variables[f"{Domain} {phase_name}particle crack length [m]"]
             dl_cr = variables[f"{Domain} {phase_name}particle cracking rate [m.s-1]"]
         dl_cr_strain = self._strain_fatigue_cracking_rate(variables, l_cr)
-        if dl_cr_strain is not None:
-            dl_cr = dl_cr + dl_cr_strain
+        phase_options = getattr(getattr(self.options, domain), self.phase)
+        gated = phase_options["crack closure"] == "SEI and growth"
+        if dl_cr_strain is not None or gated:
+            if dl_cr_strain is not None:
+                dl_cr = dl_cr + dl_cr_strain
+            if gated:  # "crack closure": a crack held shut does not propagate
+                sto_av = variables[f"R-averaged {domain} {phase_name}particle stoichiometry"]
+                if self.x_average is True:
+                    sto_av = pybamm.x_average(sto_av)
+                dl_cr = dl_cr * self.phase_param.crack_opening(sto_av)
             variables.update(
                 {
                     f"{Domain} {phase_name}particle cracking rate [m.s-1]": dl_cr,

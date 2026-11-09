@@ -952,6 +952,14 @@ class ParticleLithiumIonParameters(BaseParameters):
             out.print_name = r"U_\mathrm{p}(c^\mathrm{surf}_\mathrm{s,p}, T)"
         return out
 
+    def crack_opening(self, sto_av):
+        """"crack closure" opening fraction of the phase's cracks, from its r-averaged stoichiometry:
+        omega_min + (1 - omega_min) / (1 + exp((sto - sto_cl) / w))."""
+        omega_min = self.crack_closure_residual
+        return omega_min + (1 - omega_min) * pybamm.sigmoid(
+            sto_av, self.crack_closure_sto, 1 / self.crack_closure_width
+        )
+
     def U_delith_cryst(self, sto, phi, T):
         """Delithiation OCP [V] blended with a crystalline fraction phi
         ("silicon crystallisation"): the same clipping, entropic term and

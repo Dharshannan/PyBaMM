@@ -265,14 +265,11 @@ class SEIGrowth(BaseModel):
         # fraction follows the particle volume (r-averaged stoichiometry): cracks formed on
         # contraction close again as the particle re-expands (Beaulieu et al. 2001)
         phase_options = getattr(getattr(self.options, domain), self.phase)
-        if self.reaction == "SEI on cracks" and phase_options["crack closure"] == "true":
+        if self.reaction == "SEI on cracks" and phase_options["crack closure"] != "false":
             sto_av = variables[f"R-averaged {domain} {self.phase_name}particle stoichiometry"]
             if self.reaction_loc == "x-average":
                 sto_av = pybamm.x_average(sto_av)
-            omega_min = phase_param.crack_closure_residual
-            opening = omega_min + (1 - omega_min) * pybamm.sigmoid(
-                sto_av, phase_param.crack_closure_sto, 1 / phase_param.crack_closure_width
-            )
+            opening = phase_param.crack_opening(sto_av)
             j_sei = opening * j_sei
             variables.update(
                 {
