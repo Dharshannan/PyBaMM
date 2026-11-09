@@ -270,7 +270,8 @@ def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, 
     rpt = (f"Discharge at {RPT_RATE} until {LOWER_CUTOFF_V} V", f"Charge at {RPT_RATE} until {UPPER_CUTOFF_V} V",
            f"Hold at {UPPER_CUTOFF_V} V until C/50")
     if cond.partial:
-        top = float(age[2].split("Hold at ")[1].split(" V")[0])
+        hold = [st for st in age if st.startswith("Hold at ")]  # a window without a top CV hold gets the CC top-up
+        top = float(hold[0].split("Hold at ")[1].split(" V")[0]) if hold else 0.0
         cc = () if UPPER_CUTOFF_V - top < 0.1 else (f"Charge at C/3 until {UPPER_CUTOFF_V} V",)
         rpt = ("Rest for 10 minutes",) + cc + (f"Hold at {UPPER_CUTOFF_V} V until C/50",) + rpt
     if rpt_rest_min:  # test only: relaxes the CV hold before the C/20 discharge
