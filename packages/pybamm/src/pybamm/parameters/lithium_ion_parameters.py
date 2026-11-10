@@ -681,6 +681,10 @@ class ParticleLithiumIonParameters(BaseParameters):
         self.crack_closure_residual = pybamm.Parameter(
             f"{pref}{Domain} electrode crack closure residual opening"
         )
+        # "SEI and growth": share of the open-crack growth rate a closed crack keeps
+        self.crack_closure_growth_residual = pybamm.Parameter(
+            f"{pref}{Domain} electrode crack closure growth residual"
+        )
         # scale of the crack-face SEI current only (the open crack faces), outer surface untouched
         self.crack_face_sei_multiplier = pybamm.Parameter(
             f"{pref}{Domain} electrode crack-face SEI rate multiplier"

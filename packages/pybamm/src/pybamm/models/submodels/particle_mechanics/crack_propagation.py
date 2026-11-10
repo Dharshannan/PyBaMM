@@ -265,7 +265,9 @@ class CrackPropagation(BaseMechanics):
                 sto_av = variables[f"R-averaged {domain} {phase_name}particle stoichiometry"]
                 if self.x_average is True:
                     sto_av = pybamm.x_average(sto_av)
-                dl_cr = dl_cr * self.phase_param.crack_opening(sto_av)
+                # growth residual g: closed cracks still propagate at g x the open rate
+                g = self.phase_param.crack_closure_growth_residual
+                dl_cr = dl_cr * (g + (1 - g) * self.phase_param.crack_opening(sto_av))
             variables.update(
                 {
                     f"{Domain} {phase_name}particle cracking rate [m.s-1]": dl_cr,
