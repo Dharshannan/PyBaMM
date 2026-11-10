@@ -265,7 +265,15 @@ class SEIGrowth(BaseModel):
         # fraction follows the particle volume (r-averaged stoichiometry): cracks formed on
         # contraction close again as the particle re-expands (Beaulieu et al. 2001)
         phase_options = getattr(getattr(self.options, domain), self.phase)
-        if self.reaction == "SEI on cracks" and phase_options["crack closure"] != "false":
+        if self.reaction == "SEI on cracks" and phase_options["crack closure"] == "strain amplitude":
+            # opening from the recent strain amplitude (crack-propagation submodel)
+            opening = variables[
+                f"X-averaged {domain} electrode {self.phase_name}crack opening fraction"
+            ]
+            if self.reaction_loc != "x-average":
+                opening = pybamm.PrimaryBroadcast(opening, f"{domain} electrode")
+            j_sei = phase_param.crack_face_sei_multiplier * opening * j_sei
+        elif self.reaction == "SEI on cracks" and phase_options["crack closure"] != "false":
             sto_av = variables[f"R-averaged {domain} {self.phase_name}particle stoichiometry"]
             if self.reaction_loc == "x-average":
                 sto_av = pybamm.x_average(sto_av)

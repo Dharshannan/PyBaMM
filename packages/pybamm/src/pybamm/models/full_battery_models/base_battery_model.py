@@ -258,6 +258,14 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 "...crack closure width", "...crack closure residual opening").
                 "SEI and growth" also scales the crack growth rate (Paris and strain
                 fatigue) by omega: a crack held shut does not propagate.
+                "strain amplitude" gates both the crack-face SEI and the growth by the
+                phase's recent volumetric strain amplitude A = eps_hi - eps_lo instead
+                (fatigue threshold): omega = omega_min + (1 - omega_min) *
+                sigmoid(A - A_th, 1 / w), with eps_hi / eps_lo slow envelopes of the
+                x-averaged eps_V = ln(V/V0) that follow each peak / trough within
+                ~100 s and relax towards eps_V with the memory time tau
+                ("...crack closure strain amplitude threshold", "...crack closure
+                width", "...crack closure strain memory time [s]").
                 Can be a per-phase 2-tuple.
             * "silicon crystallisation" : str
                 Can be "false" (default) or "true". Only for a phase with a
@@ -563,7 +571,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "OCP aging deformation branches": ["delithiation", "both"],
             "volume change aging deformation": ["false", "true"],
             "silicon crystallisation": ["false", "true"],
-            "crack closure": ["false", "true", "SEI and growth"],
+            "crack closure": ["false", "true", "SEI and growth", "strain amplitude"],
             "stress-driven LAM damping": ["linear", "power"],
             "particle cracking growth": [
                 "Paris",

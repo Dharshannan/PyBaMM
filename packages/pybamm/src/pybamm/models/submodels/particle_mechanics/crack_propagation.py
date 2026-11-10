@@ -83,8 +83,86 @@ class CrackPropagation(BaseMechanics):
         variables = self._get_standard_variables(l_cr)
         if self.size_distribution:
             variables.update(self._get_standard_size_distribution_variables(l_cr_dist))
+        if self._amplitude_gated:
+            variables.update(self._get_strain_envelope_variables())
 
         return variables
+
+    @property
+    def _amplitude_gated(self):
+        phase_options = getattr(getattr(self.options, self.domain), self.phase)
+        return phase_options["crack closure"] == "strain amplitude"
+
+    def _get_strain_envelope_variables(self):
+        """"crack closure" = "strain amplitude": the upper / lower envelopes of the phase's
+        x-averaged volumetric strain eps_V = ln(V/V0), their difference (the recent strain
+        amplitude A) and the opening fraction omega(A) the crack-face SEI and growth take."""
+        domain, Domain = self.domain_Domain
+        phase_name = self.phase_param.phase_name
+        hi = pybamm.Variable(
+            f"X-averaged {domain} {phase_name}particle volumetric strain upper envelope",
+            domain="current collector",
+        )
+        lo = pybamm.Variable(
+            f"X-averaged {domain} {phase_name}particle volumetric strain lower envelope",
+            domain="current collector",
+        )
+        amplitude = hi - lo
+        opening = self.phase_param.crack_opening_amplitude(amplitude)
+        return {
+            f"X-averaged {domain} {phase_name}particle volumetric strain upper envelope": hi,
+            f"X-averaged {domain} {phase_name}particle volumetric strain lower envelope": lo,
+            f"X-averaged {domain} {phase_name}particle volumetric strain amplitude": amplitude,
+            f"X-averaged {domain} electrode {phase_name}crack opening fraction": opening,
+            f"{Domain} electrode {phase_name}crack opening fraction": pybamm.PrimaryBroadcast(
+                opening, f"{domain} electrode"
+            ),
+        }
+
+    def _volume_ratio_function(self, variables, x_avg=False, bol=False):
+        """t(sto) = V/V0 of the phase: the fitted 1 + 3*sto**n_eff (n_eff moving with the
+        LAM fraction) when "volume change aging deformation" is on with a porosity LAM
+        option, else 1 + t_change(sto). x_avg: n_eff from the x-averaged volume fraction;
+        bol: n_eff at no LAM (state-free, for initial conditions)."""
+        domain, Domain = self.domain_Domain
+        phase_name = self.phase_param.phase_name
+        phase_param = self.phase_param
+        phase_options = getattr(getattr(self.options, domain), self.phase)
+        lam_option = phase_options["loss of active material"]
+        if phase_options["volume change aging deformation"] == "true" and (
+            "porosity" in lam_option
+        ) and bol:
+            n_bol = phase_param.volume_change_deform_exponent_bol
+
+            def t_of(s):
+                return 1 + 3 * s**n_bol
+        elif phase_options["volume change aging deformation"] == "true" and (
+            "porosity" in lam_option
+        ):
+            eps_s = variables[
+                f"{Domain} electrode {phase_name}active material volume fraction"
+            ]
+            if x_avg:
+                eps_s = pybamm.x_average(eps_s)
+            exp_bol = phase_param.volume_change_deform_exponent_bol
+            exp_end = phase_param.volume_change_deform_exponent_end
+            lam_frac = pybamm.minimum(
+                pybamm.maximum(1 - eps_s / pybamm.x_average(phase_param.epsilon_s)
+                               if x_avg else 1 - eps_s / phase_param.epsilon_s, 0), 1
+            )
+            n_eff = exp_bol + lam_frac * (exp_end - exp_bol)
+
+            def t_of(s):
+                return 1 + 3 * s**n_eff
+        else:
+            # The literature t_change(sto) functions give the relative volume
+            # CHANGE dV/V0 (e.g. ~0-0.1 for graphite), whereas the fitted law
+            # above is the volume RATIO V/V0; the log strain needs the ratio.
+
+            def t_of(s):
+                return 1 + phase_param.t_change(s)
+
+        return t_of
 
     def get_coupled_variables(self, variables):
         domain, Domain = self.domain_Domain
@@ -172,30 +250,7 @@ class CrackPropagation(BaseMechanics):
         sto_rav = variables[f"R-averaged {domain} {phase_name}particle concentration"]
         rhs = variables[f"{Domain} {phase_name}particle rhs [mol.m-3.s-1]"]
         dsto_dt = pybamm.r_average(rhs) / phase_param.c_max
-
-        lam_option = phase_options["loss of active material"]
-        if phase_options["volume change aging deformation"] == "true" and (
-            "porosity" in lam_option
-        ):
-            eps_s = variables[
-                f"{Domain} electrode {phase_name}active material volume fraction"
-            ]
-            exp_bol = phase_param.volume_change_deform_exponent_bol
-            exp_end = phase_param.volume_change_deform_exponent_end
-            lam_frac = pybamm.minimum(
-                pybamm.maximum(1 - eps_s / phase_param.epsilon_s, 0), 1
-            )
-            n_eff = exp_bol + lam_frac * (exp_end - exp_bol)
-
-            def t_of(s):
-                return 1 + 3 * s**n_eff
-        else:
-            # The literature t_change(sto) functions give the relative volume
-            # CHANGE dV/V0 (e.g. ~0-0.1 for graphite), whereas the fitted law
-            # above is the volume RATIO V/V0; the log strain needs the ratio.
-
-            def t_of(s):
-                return 1 + phase_param.t_change(s)
+        t_of = self._volume_ratio_function(variables)
 
         # sto is clamped to [s_floor, 1]: the solver can overshoot past 0 at
         # the end of a deep discharge (s**n -> NaN), and at exactly 0 the
@@ -257,17 +312,25 @@ class CrackPropagation(BaseMechanics):
             dl_cr = variables[f"{Domain} {phase_name}particle cracking rate [m.s-1]"]
         dl_cr_strain = self._strain_fatigue_cracking_rate(variables, l_cr)
         phase_options = getattr(getattr(self.options, domain), self.phase)
-        gated = phase_options["crack closure"] == "SEI and growth"
+        gated = phase_options["crack closure"] in ("SEI and growth", "strain amplitude")
         if dl_cr_strain is not None or gated:
             if dl_cr_strain is not None:
                 dl_cr = dl_cr + dl_cr_strain
             if gated:  # "crack closure": a crack held shut does not propagate
-                sto_av = variables[f"R-averaged {domain} {phase_name}particle stoichiometry"]
-                if self.x_average is True:
-                    sto_av = pybamm.x_average(sto_av)
+                if self._amplitude_gated:
+                    opening = variables[
+                        f"X-averaged {domain} electrode {phase_name}crack opening fraction"
+                    ]
+                else:
+                    sto_av = variables[
+                        f"R-averaged {domain} {phase_name}particle stoichiometry"
+                    ]
+                    if self.x_average is True:
+                        sto_av = pybamm.x_average(sto_av)
+                    opening = self.phase_param.crack_opening(sto_av)
                 # growth residual g: closed cracks still propagate at g x the open rate
                 g = self.phase_param.crack_closure_growth_residual
-                dl_cr = dl_cr * (g + (1 - g) * self.phase_param.crack_opening(sto_av))
+                dl_cr = dl_cr * (g + (1 - g) * opening)
             variables.update(
                 {
                     f"{Domain} {phase_name}particle cracking rate [m.s-1]": dl_cr,
@@ -277,6 +340,40 @@ class CrackPropagation(BaseMechanics):
                 }
             )
         self.rhs = {l_cr: dl_cr}
+        if self._amplitude_gated:
+            self.rhs.update(self._strain_envelope_rhs(variables))
+
+    # rise rate of the strain envelopes onto a new peak / trough [s-1] (~100 s)
+    ENVELOPE_RISE_RATE = 1e-2
+
+    def _x_averaged_volume_strain(self, variables, sto=None, bol=False):
+        domain = self.domain
+        phase_name = self.phase_param.phase_name
+        if sto is None:
+            sto = pybamm.x_average(
+                variables[f"R-averaged {domain} {phase_name}particle stoichiometry"]
+            )
+        t_of = self._volume_ratio_function(variables, x_avg=True, bol=bol)
+        return pybamm.log(t_of(pybamm.minimum(pybamm.maximum(sto, 1e-6), 1)))
+
+    def _strain_envelope_rhs(self, variables):
+        """d eps_hi/dt = k max(eps - eps_hi, 0) - (eps_hi - eps)/tau, and the mirror image for
+        eps_lo: each envelope jumps onto a new peak (trough) within ~1/k and relaxes towards
+        the current strain over the memory time tau."""
+        domain = self.domain
+        phase_name = self.phase_param.phase_name
+        hi = variables[
+            f"X-averaged {domain} {phase_name}particle volumetric strain upper envelope"
+        ]
+        lo = variables[
+            f"X-averaged {domain} {phase_name}particle volumetric strain lower envelope"
+        ]
+        eps = self._x_averaged_volume_strain(variables)
+        k, tau = self.ENVELOPE_RISE_RATE, self.phase_param.crack_closure_memory_time
+        return {
+            hi: k * pybamm.maximum(eps - hi, 0) - (hi - eps) / tau,
+            lo: -k * pybamm.maximum(lo - eps, 0) + (eps - lo) / tau,
+        }
 
     def set_initial_conditions(self, variables):
         domain, Domain = self.domain_Domain
@@ -303,6 +400,15 @@ class CrackPropagation(BaseMechanics):
                 l_cr = variables[f"{Domain} {phase_name}particle crack length [m]"]
                 l_cr_0 = pybamm.PrimaryBroadcast(l_cr_0, f"{domain} electrode")
         self.initial_conditions = {l_cr: l_cr_0}
+        if self._amplitude_gated:  # both envelopes start at the initial strain: A = 0
+            eps0 = self._x_averaged_volume_strain(
+                variables, sto=self.phase_param.sto_init_av, bol=True
+            )
+            for name in ("upper", "lower"):
+                v = variables[
+                    f"X-averaged {domain} {phase_name}particle volumetric strain {name} envelope"
+                ]
+                self.initial_conditions[v] = eps0
 
     def add_events_from(self, variables):
         domain, Domain = self.domain_Domain

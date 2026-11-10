@@ -681,6 +681,14 @@ class ParticleLithiumIonParameters(BaseParameters):
         self.crack_closure_residual = pybamm.Parameter(
             f"{pref}{Domain} electrode crack closure residual opening"
         )
+        # "strain amplitude": threshold on the recent volumetric strain amplitude and
+        # the memory time of its envelopes
+        self.crack_closure_strain_threshold = pybamm.Parameter(
+            f"{pref}{Domain} electrode crack closure strain amplitude threshold"
+        )
+        self.crack_closure_memory_time = pybamm.Parameter(
+            f"{pref}{Domain} electrode crack closure strain memory time [s]"
+        )
         # "SEI and growth": share of the open-crack growth rate a closed crack keeps
         self.crack_closure_growth_residual = pybamm.Parameter(
             f"{pref}{Domain} electrode crack closure growth residual"
@@ -966,6 +974,14 @@ class ParticleLithiumIonParameters(BaseParameters):
         omega_min = self.crack_closure_residual
         return omega_min + (1 - omega_min) * pybamm.sigmoid(
             sto_av, self.crack_closure_sto, 1 / self.crack_closure_width
+        )
+
+    def crack_opening_amplitude(self, amplitude):
+        """"crack closure" = "strain amplitude": opening fraction from the recent volumetric
+        strain amplitude A: omega_min + (1 - omega_min) * sigmoid(A - A_th) (width as above)."""
+        omega_min = self.crack_closure_residual
+        return omega_min + (1 - omega_min) * pybamm.sigmoid(
+            self.crack_closure_strain_threshold, amplitude, 1 / self.crack_closure_width
         )
 
     def U_delith_cryst(self, sto, phi, T):
