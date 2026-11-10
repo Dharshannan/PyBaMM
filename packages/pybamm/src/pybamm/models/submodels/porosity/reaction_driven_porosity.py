@@ -120,6 +120,7 @@ class ReactionDriven(BaseModel):
         eps_dict = {}
         for domain in self.options.whole_cell_domains:
             delta_eps_k = 0
+            delta_eps_sei_k = 0  # SEI (surface + crack faces) part of delta_eps_k
             if domain != "separator":  # separator porosity does not change
                 dom = domain.split()[0]
                 Domain = dom.capitalize()
@@ -169,6 +170,9 @@ class ReactionDriven(BaseModel):
                     # a_n * (L_tot + L_tot ** 2 / R_n + L_tot ** # 3 / (3 * R_n ** 2)))
                     # but it is not clear if it is relevant or not.
                     delta_eps_k += -a_k * L_tot
+                    delta_eps_sei_k += -a_k * (
+                        (L_sei_k - L_sei_0) + L_sei_cr_k * (roughness_k - 1)
+                    )
 
             domain_param = self.param.domain_params[domain.split()[0]]
             # Structural (irreversible-only) porosity: SEI/plating/dead-Li/
@@ -302,6 +306,15 @@ class ReactionDriven(BaseModel):
                 eps_min = domain_param.epsilon_min
                 k_eps = 100.0  # softplus sharpness
                 eps_k = pybamm.softplus(eps_k, eps_min, k_eps)
+                # "permeable SEI": the electrolyte-accessible part of the SEI volume
+                # still carries electrolyte transport (transport porosity only)
+                if self.options["permeable SEI"] == "true" and dom == "negative":
+                    f_acc = pybamm.Parameter(
+                        f"{Domain} electrode SEI electrolyte-accessible fraction"
+                    )
+                    variables[f"{Domain} electrode electrolyte transport porosity"] = (
+                        eps_k - f_acc * delta_eps_sei_k
+                    )
 
             eps_dict[domain] = eps_k
 

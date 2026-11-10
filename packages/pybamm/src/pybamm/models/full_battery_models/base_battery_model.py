@@ -428,6 +428,15 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 change" or "lithium plating porosity change" to be "true" (the
                 partition is implemented inside the reaction-driven porosity
                 submodel).
+            * "permeable SEI" : str
+                Can be "false" (default) or "true". With "true" the SEI (surface and
+                crack-face) that fills the pores keeps a fraction of its volume open
+                to the electrolyte ("{Domain} electrode SEI electrolyte-accessible
+                fraction"), for electrolyte TRANSPORT only: the Bruggeman transport
+                efficiency of the electrolyte uses eps + f_acc * (SEI volume
+                fraction), while the porosity itself (electrolyte capacity, the
+                porosity-isolation gate, pore buffering) is unchanged. Models the
+                porous, electrolyte-soaked outer SEI.
             * "pore buffering transition" : str
                 Only used when "pore buffering" is "true". Selects the functional
                 form of the transmitted fraction f(eps_struct) that partitions
@@ -630,6 +639,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "particle size": ["single", "distribution"],
             "pore buffering": ["false", "true"],
             "pore buffering transition": ["tanh", "physical"],
+            "permeable SEI": ["false", "true"],
             "SEI": [
                 "none",
                 "constant",
@@ -707,6 +717,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "particle size": "single",
             "pore buffering": "false",
             "pore buffering transition": "tanh",
+            "permeable SEI": "false",
             "SEI": "none",
             "SEI film resistance": "none",
             "SEI on cracks": "false",

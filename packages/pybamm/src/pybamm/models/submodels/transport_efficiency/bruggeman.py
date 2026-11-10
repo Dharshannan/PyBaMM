@@ -29,6 +29,9 @@ class Bruggeman(BaseModel):
             for domain in self.options.whole_cell_domains:
                 Domain = domain.capitalize()
                 eps_k = variables[f"{Domain} porosity"]
+                # "permeable SEI": transport through the electrolyte-accessible
+                # part of the SEI as well (reaction-driven porosity submodel)
+                eps_k = variables.get(f"{Domain} electrolyte transport porosity", eps_k)
                 pybamm.citations.register("Bruggeman1935")
                 b_k = self.param.domain_params[domain.split()[0]].b_e
                 tor_k = eps_k**b_k
