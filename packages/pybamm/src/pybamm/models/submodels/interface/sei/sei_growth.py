@@ -208,6 +208,23 @@ class SEIGrowth(BaseModel):
             # Scott Marquis thesis (eq. 5.91)
             j_sei = -phase_param.D_sol * phase_param.c_sol * self.param.F / L_sei
 
+        elif SEI_option == "solvent-diffusion + ec reaction limited":
+            # the solvent-diffusion law plus w x the EC-reaction-limited (Yang2017) law
+            # in parallel: a potential-driven (kinetic) contribution that grows when
+            # the electrode sits at low potential, e.g. on a fast charge;
+            # w = "{phase}SEI EC-reaction contribution"
+            j_diff = -phase_param.D_sol * phase_param.c_sol * self.param.F / L_sei
+            exponent = -alpha_SEI * F_RT * eta_SEI
+            exponent_max = phase_param.exponent_max_sei
+            capped_exponent = exponent_max * pybamm.tanh(exponent / exponent_max)
+            k_exp = phase_param.k_sei * pybamm.exp(capped_exponent)
+            L_over_D = L_sei / phase_param.D_ec
+            j_ec = -self.param.F * phase_param.c_ec_0 * k_exp / (1 + L_over_D * k_exp)
+            w_ec = pybamm.Parameter(
+                f"{phase_param.phase_prefactor}SEI EC-reaction contribution"
+            )
+            j_sei = j_diff + w_ec * j_ec
+
         elif SEI_option.startswith("ec reaction limited"):
             # we have a linear system for j and c
             #  c = c_0 + j * L / F / D          [1] (eq 11 in the Yang2017 paper)

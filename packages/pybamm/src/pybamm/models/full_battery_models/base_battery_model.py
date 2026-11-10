@@ -646,6 +646,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 "reaction limited",
                 "reaction limited (asymmetric)",
                 "solvent-diffusion limited",
+                "solvent-diffusion + ec reaction limited",
                 "electron-migration limited",
                 "interstitial-diffusion limited",
                 "ec reaction limited",
