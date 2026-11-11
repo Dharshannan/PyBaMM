@@ -292,7 +292,7 @@ def schematic_mech2(results_dir):
     _box(a3, 0.06, 0.235, 0.88, 0.11, [("SEI on the new crack faces: LLI and pore filling", 7.5)])
     _arrow(a3, 0.5, 0.235, 0.5, 0.185)
     _box(a3, 0.06, 0.075, 0.88, 0.11, [(r"Pores close $\Rightarrow$ isolation (mechanism I)", 7.5)], fc="#fdecea", ec=C_ISO)
-    a3.text(0.5, 0.0, r"Both routes slower when hot: $E_{a,cr}$ = +90, $E_{a,V}$ = +150 kJ mol$^{-1}$",
+    a3.text(0.5, 0.0, r"Both routes slower when hot: $E_{a,cr}$ = $-$90, $E_{a,V}$ = $-$150 kJ mol$^{-1}$",
             ha="center", va="bottom", fontsize=7, transform=a3.transAxes, color="#444")
     style.panel_label(a3, 3)
     return fig
