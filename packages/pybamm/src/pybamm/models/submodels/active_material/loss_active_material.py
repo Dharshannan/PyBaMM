@@ -73,7 +73,7 @@ class LossActiveMaterial(BaseModel):
         if "porosity" in lam_option:
             # "dose" gate form: the same state holds the isolation dose D [s]
             # (dD/dt = g*), O(1e5-1e7) s, so it is scaled for the solver.
-            scale = 1e6 if self.options["porosity isolation gate"] in ("dose", "throughput dose") else 1
+            scale = 1e6 if self.options["porosity isolation gate"] in ("dose", "throughput dose", "phase-current dose") else 1
             if self.x_average is True:
                 isolation_state_xav = pybamm.Variable(
                     f"X-averaged {domain} electrode {phase}"
@@ -399,7 +399,7 @@ class LossActiveMaterial(BaseModel):
             # long the (tau-paced) gate needs to catch up -- decoupling
             # isolation's available DURATION from a_j_sei's own finite
             # lifetime.
-            if self.options["porosity isolation gate"] in ("dose", "throughput dose"):
+            if self.options["porosity isolation gate"] in ("dose", "throughput dose", "phase-current dose"):
                 # "dose" form (CHANGES item 16): isolation_gate is the dose D
                 # [s] (dD/dt = g*, set_rhs); rate = k_iso * D * a*j_SEI/F.
                 # Equivalent to the lagged redirect branch below with
@@ -581,6 +581,25 @@ class LossActiveMaterial(BaseModel):
                 self.rhs[isolation_state] = (
                     isolation_gate_target * abs(variables["Current [A]"]) / I_ref
                 )
+            elif self.options["porosity isolation gate"] == "phase-current dose":
+                # Isolation dose driven by this phase's own intercalation current:
+                # dD/dt = g* |a j_k| / (a j)_ref,k (the charge the phase cycles).
+                pref = self.phase_param.phase_prefactor
+                aj_ref = pybamm.Parameter(
+                    f"{pref}{Domain} electrode porosity-isolation dose reference "
+                    "volumetric current [A.m-3]"
+                )
+                if self.x_average is True:
+                    a_j_k = variables[
+                        f"X-averaged {domain} electrode {phase_name}"
+                        "volumetric interfacial current density [A.m-3]"
+                    ]
+                else:
+                    a_j_k = variables[
+                        f"{Domain} electrode {phase_name}"
+                        "volumetric interfacial current density [A.m-3]"
+                    ]
+                self.rhs[isolation_state] = isolation_gate_target * abs(a_j_k) / aj_ref
             else:
                 # First-order relaxation toward the algebraic target -- see
                 # get_fundamental_variables' doc-comment for why.

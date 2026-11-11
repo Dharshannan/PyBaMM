@@ -182,6 +182,11 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 with "Porosity-isolation dose reference current [A]" I_ref
                 (D advances as in "dose" while |I| = I_ref, not at rest):
                 isolation then advances per cycle, not per hour.
+                "phase-current dose": as "throughput dose", but each phase's
+                dose accumulates with that phase's own intercalation current,
+                dD/dt = g* |a j_k| / (a j)_ref,k, with "...porosity-isolation
+                dose reference volumetric current [A.m-3]" (a j)_ref,k: the
+                silicon dose then follows the charge the silicon cycles.
             * "SEI reaction redirect to LAM" : str
                 Can be "false" (default) or "true". When "true" and "loss of
                 active material" includes "porosity isolation" for a phase,
@@ -579,7 +584,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             ],
             "interface utilisation": ["full", "constant", "current-driven"],
             "SEI reaction redirect to LAM": ["false", "true"],
-            "porosity isolation gate": ["lagged", "dose", "throughput dose"],
+            "porosity isolation gate": ["lagged", "dose", "throughput dose", "phase-current dose"],
             "open-circuit potential aging deformation": ["false", "true"],
             "OCP aging deformation driver": ["LAM fraction", "throughput"],
             "OCP aging deformation branches": ["delithiation", "both"],
