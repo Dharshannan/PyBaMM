@@ -73,7 +73,7 @@ class LossActiveMaterial(BaseModel):
         if "porosity" in lam_option:
             # "dose" gate form: the same state holds the isolation dose D [s]
             # (dD/dt = g*), O(1e5-1e7) s, so it is scaled for the solver.
-            scale = 1e6 if self.options["porosity isolation gate"] == "dose" else 1
+            scale = 1e6 if self.options["porosity isolation gate"] in ("dose", "throughput dose") else 1
             if self.x_average is True:
                 isolation_state_xav = pybamm.Variable(
                     f"X-averaged {domain} electrode {phase}"
@@ -399,7 +399,7 @@ class LossActiveMaterial(BaseModel):
             # long the (tau-paced) gate needs to catch up -- decoupling
             # isolation's available DURATION from a_j_sei's own finite
             # lifetime.
-            if self.options["porosity isolation gate"] == "dose":
+            if self.options["porosity isolation gate"] in ("dose", "throughput dose"):
                 # "dose" form (CHANGES item 16): isolation_gate is the dose D
                 # [s] (dD/dt = g*, set_rhs); rate = k_iso * D * a*j_SEI/F.
                 # Equivalent to the lagged redirect branch below with
@@ -572,6 +572,15 @@ class LossActiveMaterial(BaseModel):
             if self.options["porosity isolation gate"] == "dose":
                 # Isolation dose: plain time integral of the target.
                 self.rhs[isolation_state] = isolation_gate_target
+            elif self.options["porosity isolation gate"] == "throughput dose":
+                # Isolation dose driven by the charge passed: dD/dt = g* |I| / I_ref
+                # (cycling, not time, advances isolation; nothing at rest).
+                I_ref = pybamm.Parameter(
+                    "Porosity-isolation dose reference current [A]"
+                )
+                self.rhs[isolation_state] = (
+                    isolation_gate_target * abs(variables["Current [A]"]) / I_ref
+                )
             else:
                 # First-order relaxation toward the algebraic target -- see
                 # get_fundamental_variables' doc-comment for why.

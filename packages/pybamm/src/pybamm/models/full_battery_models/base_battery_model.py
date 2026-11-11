@@ -177,6 +177,11 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 tau >> the experiment). No SEI-current redirect: SEI film
                 growth is not reduced by the gate (that (1 - g) cut is
                 negligible in the lagged form anyway).
+                "throughput dose": as "dose", but the dose accumulates with
+                the charge passed instead of time, dD/dt = g* |I| / I_ref,
+                with "Porosity-isolation dose reference current [A]" I_ref
+                (D advances as in "dose" while |I| = I_ref, not at rest):
+                isolation then advances per cycle, not per hour.
             * "SEI reaction redirect to LAM" : str
                 Can be "false" (default) or "true". When "true" and "loss of
                 active material" includes "porosity isolation" for a phase,
@@ -574,7 +579,7 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             ],
             "interface utilisation": ["full", "constant", "current-driven"],
             "SEI reaction redirect to LAM": ["false", "true"],
-            "porosity isolation gate": ["lagged", "dose"],
+            "porosity isolation gate": ["lagged", "dose", "throughput dose"],
             "open-circuit potential aging deformation": ["false", "true"],
             "OCP aging deformation driver": ["LAM fraction", "throughput"],
             "OCP aging deformation branches": ["delithiation", "both"],

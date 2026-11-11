@@ -384,7 +384,7 @@ class SEIGrowth(BaseModel):
             and "porosity" in lam_option
             # "dose" gate: the state is a dose [s], not a fraction, and there
             # is no redirect (SEI film growth is not reduced).
-            and self.options["porosity isolation gate"] != "dose"
+            and self.options["porosity isolation gate"] not in ("dose", "throughput dose")
         ):
             if self.reaction_loc == "x-average":
                 isolation_gate = variables[
