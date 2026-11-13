@@ -91,7 +91,7 @@ class CrackPropagation(BaseMechanics):
     @property
     def _amplitude_gated(self):
         phase_options = getattr(getattr(self.options, self.domain), self.phase)
-        return phase_options["crack closure"] == "strain amplitude"
+        return phase_options["crack closure"] in ("strain amplitude", "strain amplitude power")
 
     def _get_strain_envelope_variables(self):
         """"crack closure" = "strain amplitude": the upper / lower envelopes of the phase's
@@ -108,7 +108,12 @@ class CrackPropagation(BaseMechanics):
             domain="current collector",
         )
         amplitude = hi - lo
-        opening = self.phase_param.crack_opening_amplitude(amplitude)
+        phase_options = getattr(getattr(self.options, domain), self.phase)
+        if phase_options["crack closure"] == "strain amplitude power":
+            # crack-face SEI activity (A / A_ref)^n; the growth is not gated by it
+            opening = self.phase_param.crack_activity_amplitude_power(amplitude)
+        else:
+            opening = self.phase_param.crack_opening_amplitude(amplitude)
         return {
             f"X-averaged {domain} {phase_name}particle volumetric strain upper envelope": hi,
             f"X-averaged {domain} {phase_name}particle volumetric strain lower envelope": lo,

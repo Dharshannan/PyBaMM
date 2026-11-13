@@ -689,6 +689,13 @@ class ParticleLithiumIonParameters(BaseParameters):
         self.crack_closure_memory_time = pybamm.Parameter(
             f"{pref}{Domain} electrode crack closure strain memory time [s]"
         )
+        # "strain amplitude power": crack-face SEI x (A / A_ref)^n
+        self.crack_closure_amplitude_ref = pybamm.Parameter(
+            f"{pref}{Domain} electrode crack closure strain amplitude reference"
+        )
+        self.crack_closure_amplitude_exponent = pybamm.Parameter(
+            f"{pref}{Domain} electrode crack closure strain amplitude exponent"
+        )
         # "SEI and growth": share of the open-crack growth rate a closed crack keeps
         self.crack_closure_growth_residual = pybamm.Parameter(
             f"{pref}{Domain} electrode crack closure growth residual"
@@ -983,6 +990,14 @@ class ParticleLithiumIonParameters(BaseParameters):
         return omega_min + (1 - omega_min) * pybamm.sigmoid(
             self.crack_closure_strain_threshold, amplitude, 1 / self.crack_closure_width
         )
+
+    def crack_activity_amplitude_power(self, amplitude):
+        """"crack closure" = "strain amplitude power": crack-face SEI activity from the
+        recent volumetric strain amplitude A as a smooth power law, (A / A_ref)^n (no
+        threshold; n = 2 for SEI-fracture loss ~ swing^2). A is clipped at 0."""
+        return (
+            pybamm.maximum(amplitude, 0) / self.crack_closure_amplitude_ref
+        ) ** self.crack_closure_amplitude_exponent
 
     def U_delith_cryst(self, sto, phi, T):
         """Delithiation OCP [V] blended with a crystalline fraction phi

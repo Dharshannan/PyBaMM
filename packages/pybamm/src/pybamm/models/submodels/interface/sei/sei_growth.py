@@ -282,7 +282,10 @@ class SEIGrowth(BaseModel):
         # fraction follows the particle volume (r-averaged stoichiometry): cracks formed on
         # contraction close again as the particle re-expands (Beaulieu et al. 2001)
         phase_options = getattr(getattr(self.options, domain), self.phase)
-        if self.reaction == "SEI on cracks" and phase_options["crack closure"] == "strain amplitude":
+        if self.reaction == "SEI on cracks" and phase_options["crack closure"] in (
+            "strain amplitude",
+            "strain amplitude power",
+        ):
             # opening from the recent strain amplitude (crack-propagation submodel)
             opening = variables[
                 f"X-averaged {domain} electrode {self.phase_name}crack opening fraction"
