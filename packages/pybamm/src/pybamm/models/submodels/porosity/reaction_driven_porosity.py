@@ -140,6 +140,23 @@ class ReactionDriven(BaseModel):
                         f"{Domain} electrode {phase_name}"
                         "surface area to volume ratio [m-1]"
                     ]
+                    if (
+                        dom == "negative"
+                        and self.options["SEI porosity area"] == "initial"
+                    ):
+                        # a_k at the initial active fraction: the SEI of
+                        # isolated particles stays in the pores
+                        # (x-averaged ratio: the LAM states are x-averaged)
+                        eps_s_k = variables[
+                            f"X-averaged {dom} electrode {phase_name}"
+                            "active material volume fraction"
+                        ]
+                        eps_s_k0 = pybamm.x_average(
+                            self.param.domain_params[dom]
+                            .phase_params[phase]
+                            .epsilon_s
+                        )
+                        a_k = a_k * eps_s_k0 / eps_s_k
                     if SEI_option == "none":
                         L_sei_0 = pybamm.Scalar(0)
                     else:

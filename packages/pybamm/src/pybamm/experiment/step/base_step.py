@@ -452,6 +452,11 @@ class BaseStep:
         new_model, new_parameter_values = self.set_up(new_model, new_parameter_values)
         self.update_model_events(new_model)
 
+        # "porosity isolation hold clock": 1 in voltage holds and zero-current rests
+        flag = "Porosity-isolation time-clock flag"
+        if flag in new_parameter_values.keys():
+            new_parameter_values[flag] = 1.0 if self._isolation_time_clock() else 0.0
+
         # Update temperature
         if self.temperature is not None:
             new_parameter_values["Ambient temperature [K]"] = self.temperature
@@ -461,6 +466,18 @@ class BaseStep:
             new_model,
             inplace=inplace,
             delayed_variable_processing=delayed_variable_processing,
+        )
+
+    def _isolation_time_clock(self):
+        """True for a voltage hold or a zero-current rest ("porosity isolation hold
+        clock": the isolation dose runs on time there, on charge otherwise)."""
+        if getattr(self, "control_kind", None) == ControlKind.VOLTAGE:
+            return True
+        value = getattr(self, "value", None)
+        return (
+            isinstance(self, pybamm.step.Current)
+            and isinstance(value, numbers.Number)
+            and value == 0
         )
 
     def get_termination_events(self, variables):

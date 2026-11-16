@@ -187,6 +187,67 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 dD/dt = g* |a j_k| / (a j)_ref,k, with "...porosity-isolation
                 dose reference volumetric current [A.m-3]" (a j)_ref,k: the
                 silicon dose then follows the charge the silicon cycles.
+                "particle-current dose": as "phase-current dose", but per
+                remaining particle, dD/dt = g* |j_k| / j_ref,k with j_ref,k =
+                (a j)_ref,k / a_k,0 (= the phase-current rate x eps_k,0 / eps_k):
+                identical at beginning of life, but the dose of the particles
+                still cycling does not slow as others are isolated.
+                "exchange-current dose": as "phase-current dose", but the
+                reference is the phase's own exchange current, (a j)_ref,k =
+                a_k,0 j0_k(c_e, c_s,surf, T): dD/dt = g* |j_k| / j0_k x
+                eps_k / eps_k,0, no reference parameter.
+                "particle exchange-current dose": per remaining particle,
+                dD/dt = g* |j_k| / j0_k.
+                "overpotential dose": as "exchange-current dose" with |j_k|/j0_k
+                replaced by the symmetric Butler-Volmer overpotential F|eta|/RT =
+                2 asinh(|j_k| / 2 j0_k) (equal for |j| << j0, logarithmic when
+                j0 -> 0 in starved electrolyte or a full/empty surface).
+            * "porosity isolation driver" : str
+                Can be "SEI current" (default) or "intercalation current". With a
+                dose gate, the isolation rate k_iso D (a j)/F is driven by the
+                phase's SEI current (default), or, for the secondary (Si) phase
+                only, by |a j_Si|: contact loss per unit volume change in clogged
+                pores, so isolation stops in CV holds and rests.
+            * "porosity isolation residual lithiation" : str
+                Can be "false" (default) or "true". With a dose gate, the Si
+                (secondary) isolation rate is multiplied by (1 + n m), m a
+                memory of the cycle-minimum average Si stoichiometry (follows
+                it down within 60 s, relaxes up with "...residual lithiation
+                memory time [s]"), n = "...residual lithiation isolation
+                factor": Si that never delithiates stays swollen in the
+                clogged pores and loses contact faster.
+            * "porosity isolation clock j0 floor" : str
+                Can be "false" (default) or "true". With the exchange-current or
+                overpotential doses, "true" evaluates the clock's j0 from local
+                states clipped to c_e >= 1 mol.m-3 and 1e-4 <= c_s,surf/c_max <=
+                1 - 1e-4 (x-averaged after): a numerical floor on the j0 -> 0
+                singularity; the kinetics keep the unclipped j0. "initial
+                electrolyte" also fixes c_e at the initial electrolyte
+                concentration (j0 from the local Si stoichiometry and
+                temperature only), so pore-electrolyte depletion does not feed
+                the clock.
+            * "porosity isolation hold clock" : str
+                Can be "false" (default) or "true". With a "throughput dose",
+                "phase-current dose" or "particle-current dose", "true" runs the
+                dose on the time clock of "dose" (dD/dt = g*) during voltage holds
+                and zero-current rests, and on the charge clock otherwise. The
+                experiment step sets the parameter "Porosity-isolation time-clock
+                flag" (1 in voltage-controlled and rest steps, 0 otherwise); no
+                fitted parameter is added, since I_ref already makes the two
+                clocks equal for a C/3 full-window cycle.
+            * "porosity isolation remaining fraction" : str
+                Can be "true" (default) or "false". With a dose gate, "true"
+                multiplies the isolation LAM rate k D a j_SEI / F by the remaining
+                active fraction eps_k / eps_k,0; "false" drops that factor, since
+                a j_SEI already scales with the remaining particle surface (the
+                default counts the lost material twice).
+            * "SEI porosity area" : str
+                Can be "current" (default) or "initial". The SEI (surface and
+                crack-face) and plating volume removed from the negative
+                electrode pores is a_k L; "current" takes a_k = 3 eps_k / R_k at
+                the present active fraction, so the SEI of isolated particles
+                leaves the pores; "initial" takes a_k at the initial active
+                fraction, so that SEI stays in the pores.
             * "SEI reaction redirect to LAM" : str
                 Can be "false" (default) or "true". When "true" and "loss of
                 active material" includes "porosity isolation" for a phase,
@@ -591,7 +652,22 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             ],
             "interface utilisation": ["full", "constant", "current-driven"],
             "SEI reaction redirect to LAM": ["false", "true"],
-            "porosity isolation gate": ["lagged", "dose", "throughput dose", "phase-current dose"],
+            "porosity isolation gate": [
+                "lagged",
+                "dose",
+                "throughput dose",
+                "phase-current dose",
+                "particle-current dose",
+                "exchange-current dose",
+                "particle exchange-current dose",
+                "overpotential dose",
+            ],
+            "porosity isolation hold clock": ["false", "true"],
+            "porosity isolation clock j0 floor": ["false", "true", "initial electrolyte"],
+            "porosity isolation driver": ["SEI current", "intercalation current"],
+            "porosity isolation residual lithiation": ["false", "true"],
+            "porosity isolation remaining fraction": ["true", "false"],
+            "SEI porosity area": ["current", "initial"],
             "open-circuit potential aging deformation": ["false", "true"],
             "OCP aging deformation driver": ["LAM fraction", "throughput"],
             "OCP aging deformation branches": ["delithiation", "both"],
@@ -718,6 +794,12 @@ class BatteryModelOptions(pybamm.FuzzyDict):
             "interface utilisation": "full",
             "SEI reaction redirect to LAM": "false",
             "porosity isolation gate": "lagged",
+            "porosity isolation hold clock": "false",
+            "porosity isolation clock j0 floor": "false",
+            "porosity isolation driver": "SEI current",
+            "porosity isolation residual lithiation": "false",
+            "porosity isolation remaining fraction": "true",
+            "SEI porosity area": "current",
             "open-circuit potential aging deformation": "false",
             "OCP aging deformation driver": "LAM fraction",
             "OCP aging deformation branches": "delithiation",

@@ -73,7 +73,7 @@ class LossActiveMaterial(BaseModel):
         if "porosity" in lam_option:
             # "dose" gate form: the same state holds the isolation dose D [s]
             # (dD/dt = g*), O(1e5-1e7) s, so it is scaled for the solver.
-            scale = 1e6 if self.options["porosity isolation gate"] in ("dose", "throughput dose", "phase-current dose") else 1
+            scale = 1e6 if self.options["porosity isolation gate"] in ("dose", "throughput dose", "phase-current dose", "particle-current dose", "exchange-current dose", "particle exchange-current dose", "overpotential dose") else 1
             if self.x_average is True:
                 isolation_state_xav = pybamm.Variable(
                     f"X-averaged {domain} electrode {phase}"
@@ -99,8 +99,25 @@ class LossActiveMaterial(BaseModel):
                     "porosity-isolation gate state": pybamm.x_average(isolation_state),
                 }
             )
+            if self._residual_lithiation_on():
+                # memory of the cycle-minimum (residual) stoichiometry of this phase
+                m_res = pybamm.Variable(
+                    f"{Domain} electrode {phase}residual lithiation memory",
+                    domain="current collector",
+                )
+                variables[f"{Domain} electrode {phase}residual lithiation memory"] = m_res
 
         return variables
+
+    def _residual_lithiation_on(self):
+        lam_option = getattr(getattr(self.options, self.domain), self.phase)[
+            "loss of active material"
+        ]
+        return (
+            self.options["porosity isolation residual lithiation"] == "true"
+            and self.phase == "secondary"
+            and "porosity" in lam_option
+        )
 
     def get_coupled_variables(self, variables):
         domain, Domain = self.domain_Domain
@@ -399,16 +416,45 @@ class LossActiveMaterial(BaseModel):
             # long the (tau-paced) gate needs to catch up -- decoupling
             # isolation's available DURATION from a_j_sei's own finite
             # lifetime.
-            if self.options["porosity isolation gate"] in ("dose", "throughput dose", "phase-current dose"):
+            if self.options["porosity isolation gate"] in ("dose", "throughput dose", "phase-current dose", "particle-current dose", "exchange-current dose", "particle exchange-current dose", "overpotential dose"):
                 # "dose" form (CHANGES item 16): isolation_gate is the dose D
                 # [s] (dD/dt = g*, set_rhs); rate = k_iso * D * a*j_SEI/F.
                 # Equivalent to the lagged redirect branch below with
                 # k_iso = Y/tau when tau >> the experiment, minus its
                 # (negligible) (1 - g) cut on SEI film growth.
+                if self.options["porosity isolation remaining fraction"] == "false":
+                    # a_j_sei already scales with the remaining particle surface
+                    remaining_frac = pybamm.Scalar(1)
+                iso_driver = a_j_sei
+                if (
+                    self.options["porosity isolation driver"] == "intercalation current"
+                    and self.phase == "secondary"
+                ):
+                    # Si particles lose contact per unit volume change in clogged
+                    # pores: driven by |a j_Si| (the swelling rate), so isolation
+                    # stops in CV holds and rests; minus sign as for a_j_sei (< 0)
+                    pre = "X-averaged " if self.x_average else ""
+                    dom = domain if self.x_average else Domain
+                    a_j_k = variables[
+                        f"{pre}{dom} electrode {phase_name}"
+                        "volumetric interfacial current density [A.m-3]"
+                    ]
+                    iso_driver = -abs(a_j_k)
+                if self._residual_lithiation_on():
+                    # Si that never delithiates (residual lithiation m, the cycle
+                    # minimum) stays swollen in the clogged pores: rate x (1 + n m)
+                    m_res = variables[f"{Domain} electrode {phase_name}residual lithiation memory"]
+                    if self.x_average is not True:
+                        m_res = pybamm.PrimaryBroadcast(m_res, f"{domain} electrode")
+                    n_res = pybamm.Parameter(
+                        f"{self.phase_param.phase_prefactor}{Domain} electrode "
+                        "residual lithiation isolation factor"
+                    )
+                    iso_driver = iso_driver * (1 + n_res * m_res)
                 j_iso = (
                     self.phase_param.k_LAM_iso_dose
                     * isolation_gate
-                    * a_j_sei
+                    * iso_driver
                     / self.param.F
                     * remaining_frac
                 )
@@ -581,9 +627,15 @@ class LossActiveMaterial(BaseModel):
                 self.rhs[isolation_state] = (
                     isolation_gate_target * abs(variables["Current [A]"]) / I_ref
                 )
-            elif self.options["porosity isolation gate"] == "phase-current dose":
+            elif self.options["porosity isolation gate"] in (
+                "phase-current dose",
+                "particle-current dose",
+            ):
                 # Isolation dose driven by this phase's own intercalation current:
                 # dD/dt = g* |a j_k| / (a j)_ref,k (the charge the phase cycles).
+                # "particle-current dose": per remaining particle instead, |j_k| / j_ref,k
+                # with j_ref,k = (a j)_ref,k / a_k,0, i.e. x eps_k,0 / eps_k: losing
+                # particles does not slow the dose of the ones still cycling.
                 pref = self.phase_param.phase_prefactor
                 aj_ref = pybamm.Parameter(
                     f"{pref}{Domain} electrode porosity-isolation dose reference "
@@ -599,13 +651,85 @@ class LossActiveMaterial(BaseModel):
                         f"{Domain} electrode {phase_name}"
                         "volumetric interfacial current density [A.m-3]"
                     ]
-                self.rhs[isolation_state] = isolation_gate_target * abs(a_j_k) / aj_ref
+                dose_rate = isolation_gate_target * abs(a_j_k) / aj_ref
+                if self.options["porosity isolation gate"] == "particle-current dose":
+                    eps_init = self.phase_param.epsilon_s
+                    if self.x_average is True:
+                        eps_init = pybamm.x_average(eps_init)
+                    dose_rate = dose_rate * eps_init / eps_solid
+                if self.options["porosity isolation hold clock"] == "true":
+                    # time clock during voltage holds and rests, charge clock otherwise
+                    flag = pybamm.Parameter("Porosity-isolation time-clock flag")
+                    dose_rate = flag * isolation_gate_target + (1 - flag) * dose_rate
+                self.rhs[isolation_state] = dose_rate
+            elif self.options["porosity isolation gate"] in (
+                "exchange-current dose",
+                "particle exchange-current dose",
+                "overpotential dose",
+            ):
+                # Reference current = the phase's own exchange current density
+                # j0_k(c_e, c_s,surf, T) (no fitted reference): dD/dt = g* |j_k| / j0_k,
+                # x eps_k / eps_k,0 for "exchange-current dose" (= |a j_k| / (a_k,0 j0_k)).
+                pre = "X-averaged " if self.x_average else ""
+                dom = domain if self.x_average else Domain
+                j_k = variables[
+                    f"{pre}{dom} electrode {phase_name}interfacial current density [A.m-2]"
+                ]
+                j0_k = variables[
+                    f"{pre}{dom} electrode {phase_name}exchange current density [A.m-2]"
+                ]
+                if self.options["porosity isolation clock j0 floor"] != "false":
+                    # clock-only j0 from clipped local states (c_e >= 1 mol.m-3,
+                    # 1e-4 <= c_s,surf / c_max <= 1 - 1e-4), x-averaged: a numerical
+                    # floor on the starved / full-surface singularity; kinetics untouched
+                    c_e_loc = variables[f"{Domain} electrolyte concentration [mol.m-3]"]
+                    c_s_loc = variables[
+                        f"{Domain} {phase_name}particle surface concentration [mol.m-3]"
+                    ]
+                    T_loc = variables[f"{Domain} electrode temperature [K]"]
+                    c_max = self.phase_param.c_max
+                    c_e_loc = pybamm.maximum(c_e_loc, 1.0)
+                    if self.options["porosity isolation clock j0 floor"] == "initial electrolyte":
+                        # j0 at the initial (bulk) electrolyte concentration
+                        c_e_loc = self.param.c_e_init + 0 * c_e_loc
+                    c_s_loc = pybamm.maximum(
+                        pybamm.minimum(c_s_loc, (1 - 1e-4) * c_max), 1e-4 * c_max
+                    )
+                    j0_k = self.phase_param.j0(c_e_loc, c_s_loc, T_loc)
+                    if self.x_average is True:
+                        j0_k = pybamm.x_average(j0_k)
+                if self.options["porosity isolation gate"] == "overpotential dose":
+                    # F|eta|/RT of the symmetric Butler-Volmer law: bounded (log) as j0 -> 0
+                    dose_rate = isolation_gate_target * 2 * pybamm.arcsinh(abs(j_k) / (2 * j0_k))
+                else:
+                    dose_rate = isolation_gate_target * abs(j_k) / j0_k
+                if self.options["porosity isolation gate"] in ("exchange-current dose", "overpotential dose"):
+                    eps_init = self.phase_param.epsilon_s
+                    if self.x_average is True:
+                        eps_init = pybamm.x_average(eps_init)
+                    dose_rate = dose_rate * eps_solid / eps_init
+                if self.options["porosity isolation hold clock"] == "true":
+                    flag = pybamm.Parameter("Porosity-isolation time-clock flag")
+                    dose_rate = flag * isolation_gate_target + (1 - flag) * dose_rate
+                self.rhs[isolation_state] = dose_rate
             else:
                 # First-order relaxation toward the algebraic target -- see
                 # get_fundamental_variables' doc-comment for why.
                 self.rhs[isolation_state] = (
                     isolation_gate_target - isolation_state
                 ) / tau_LAM_iso
+
+        if self._residual_lithiation_on():
+            # Peak-hold of the minimum: follows the stoichiometry down within
+            # 60 s, relaxes up with the memory time (holds the cycle minimum)
+            m_res = variables[f"{Domain} electrode {phase_name}residual lithiation memory"]
+            x_av = variables[f"Average {domain} {phase_name}particle stoichiometry"]
+            tau_mem = pybamm.Parameter(
+                f"{self.phase_param.phase_prefactor}{Domain} electrode "
+                "residual lithiation memory time [s]"
+            )
+            down = pybamm.sigmoid(x_av, m_res, 1000)  # 1 when x < m
+            self.rhs[m_res] = (x_av - m_res) * (down / 60.0 + (1 - down) / tau_mem)
 
     def set_initial_conditions(self, variables):
         domain, Domain = self.domain_Domain
@@ -629,6 +753,10 @@ class LossActiveMaterial(BaseModel):
             f"in {domain} electrode [mol]"
         ]
         self.initial_conditions[lli_due_to_lam] = pybamm.Scalar(0)
+        if self._residual_lithiation_on():
+            # starts at 0 (no residual lithiation before the first cycle's minimum is seen)
+            m_res = variables[f"{Domain} electrode {phase_name}residual lithiation memory"]
+            self.initial_conditions[m_res] = pybamm.Scalar(0)
 
         lam_option = getattr(getattr(self.options, domain), self.phase)[
             "loss of active material"
