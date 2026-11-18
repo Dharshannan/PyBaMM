@@ -280,7 +280,8 @@ class FickianDiffusion(BaseParticle):
         phase_name = self.phase_name
         phase_options = getattr(getattr(self.options, domain), self.phase)
         if (
-            phase_options["isolation lithium trapping"] != "true"
+            phase_options["isolation lithium trapping"]
+            not in ("true", "residual lithiation", "residual lithiation history")
             or "porosity" not in phase_options["loss of active material"]
         ):
             return None
@@ -298,7 +299,11 @@ class FickianDiffusion(BaseParticle):
         ]
         c_rav = pybamm.r_average(c_s)
         c_max = self.phase_param.c_max
-        theta = self.phase_param.isolation_li_trap_fraction
+        from pybamm.models.submodels.active_material.loss_active_material import (
+            isolation_trap_fraction,
+        )
+
+        theta = isolation_trap_fraction(self, variables)
         rate = theta * pybamm.maximum(c_max - c_rav, 0) * pybamm.maximum(-j_iso, 0) / eps_s
         rate_r = pybamm.PrimaryBroadcast(rate, [f"{domain} {phase_name}particle"])
         return rate_r * c_s / (c_s + 0.01 * c_max)

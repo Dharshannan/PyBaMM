@@ -106,15 +106,35 @@ class LossActiveMaterial(BaseModel):
                     domain="current collector",
                 )
                 variables[f"{Domain} electrode {phase}residual lithiation memory"] = m_res
+                if self._drain_history_on():
+                    h_dr = pybamm.Variable(
+                        f"{Domain} electrode {phase}isolation trapping drain history",
+                        domain="current collector",
+                    )
+                    variables[
+                        f"{Domain} electrode {phase}isolation trapping drain history"
+                    ] = h_dr
 
         return variables
+
+    def _drain_history_on(self):
+        trap = getattr(getattr(self.options, self.domain), self.phase)[
+            "isolation lithium trapping"
+        ]
+        return trap == "residual lithiation history" and self._residual_lithiation_on()
 
     def _residual_lithiation_on(self):
         lam_option = getattr(getattr(self.options, self.domain), self.phase)[
             "loss of active material"
         ]
+        trap = getattr(getattr(self.options, self.domain), self.phase)[
+            "isolation lithium trapping"
+        ]
         return (
-            self.options["porosity isolation residual lithiation"] == "true"
+            (
+                self.options["porosity isolation residual lithiation"] == "true"
+                or trap in ("residual lithiation", "residual lithiation history")
+            )
             and self.phase == "secondary"
             and "porosity" in lam_option
         )
@@ -440,7 +460,10 @@ class LossActiveMaterial(BaseModel):
                         "volumetric interfacial current density [A.m-3]"
                     ]
                     iso_driver = -abs(a_j_k)
-                if self._residual_lithiation_on():
+                if (
+                    self._residual_lithiation_on()
+                    and self.options["porosity isolation residual lithiation"] == "true"
+                ):
                     # Si that never delithiates (residual lithiation m, the cycle
                     # minimum) stays swollen in the clogged pores: rate x (1 + n m)
                     m_res = variables[f"{Domain} electrode {phase_name}residual lithiation memory"]
@@ -577,13 +600,17 @@ class LossActiveMaterial(BaseModel):
         # removes from the remaining particles is also lithium lost to LAM.
         phase_options = getattr(getattr(self.options, domain), self.phase)
         lam_option = phase_options["loss of active material"]
-        if phase_options["isolation lithium trapping"] == "true" and "porosity" in lam_option:
+        if phase_options["isolation lithium trapping"] in (
+            "true",
+            "residual lithiation",
+            "residual lithiation history",
+        ) and "porosity" in lam_option:
             prefix = "X-averaged " if self.x_average else ""
             dom = domain if self.x_average else Domain
             j_iso = variables[
                 f"{prefix}{dom} electrode {phase_name}LAM rate from porosity isolation [s-1]"
             ]
-            theta = self.phase_param.isolation_li_trap_fraction
+            theta = isolation_trap_fraction(self, variables)
             c_max = self.phase_param.c_max
             lli_rate = lli_rate + V * pybamm.x_average(
                 theta * pybamm.maximum(c_max - c_s_rav, 0) * pybamm.maximum(-j_iso, 0)
@@ -730,6 +757,19 @@ class LossActiveMaterial(BaseModel):
             )
             down = pybamm.sigmoid(x_av, m_res, 1000)  # 1 when x < m
             self.rhs[m_res] = (x_av - m_res) * (down / 60.0 + (1 - down) / tau_mem)
+            if self._drain_history_on():
+                # drain history: relaxes toward s(m) with the charge passed
+                h_dr = variables[
+                    f"{Domain} electrode {phase_name}isolation trapping drain history"
+                ]
+                Q_h = pybamm.Parameter(
+                    f"{self.phase_param.phase_prefactor}{Domain} electrode "
+                    "isolation lithium trapping drain history charge [A.h]"
+                )
+                s_m = _drain_sigmoid(self, m_res)
+                self.rhs[h_dr] = (
+                    (s_m - h_dr) * abs(variables["Current [A]"]) / (3600 * Q_h)
+                )
 
     def set_initial_conditions(self, variables):
         domain, Domain = self.domain_Domain
@@ -757,6 +797,12 @@ class LossActiveMaterial(BaseModel):
             # starts at 0 (no residual lithiation before the first cycle's minimum is seen)
             m_res = variables[f"{Domain} electrode {phase_name}residual lithiation memory"]
             self.initial_conditions[m_res] = pybamm.Scalar(0)
+            if self._drain_history_on():
+                # fresh cell: no drained cycles yet (full trapping)
+                h_dr = variables[
+                    f"{Domain} electrode {phase_name}isolation trapping drain history"
+                ]
+                self.initial_conditions[h_dr] = pybamm.Scalar(1)
 
         lam_option = getattr(getattr(self.options, domain), self.phase)[
             "loss of active material"
@@ -774,3 +820,42 @@ class LossActiveMaterial(BaseModel):
                     f"{Domain} electrode {phase_name}porosity-isolation gate state"
                 ]
             self.initial_conditions[isolation_state] = pybamm.Scalar(0)
+
+
+def isolation_trap_fraction(submodel, variables):
+    """Isolation lithium trapping fraction theta of a submodel's phase. "true": the
+    constant "...isolation lithium trapping fraction". "residual lithiation": that
+    constant x sigmoid((m - x*)/w), m the phase's residual lithiation memory (cycle-
+    minimum average stoichiometry): particles of a phase the window drains every cycle
+    (m ~ 0) are emptied on their way to isolation, those of a phase it never drains
+    (m >~ x*) are lost with their swollen-state lithium. Shaped like the isolation
+    rate (x-averaged: current collector; else broadcast over the electrode)."""
+    domain, Domain = submodel.domain_Domain
+    phase_name = submodel.phase_name
+    phase_options = getattr(getattr(submodel.options, domain), submodel.phase)
+    theta = submodel.phase_param.isolation_li_trap_fraction
+    trap = phase_options["isolation lithium trapping"]
+    if trap not in ("residual lithiation", "residual lithiation history"):
+        return theta
+    if trap == "residual lithiation history":
+        s = variables[f"{Domain} electrode {phase_name}isolation trapping drain history"]
+    else:
+        m_res = variables[f"{Domain} electrode {phase_name}residual lithiation memory"]
+        s = _drain_sigmoid(submodel, m_res)
+    if submodel.x_average is not True:
+        s = pybamm.PrimaryBroadcast(s, f"{domain} electrode")
+    return theta * s
+
+
+def _drain_sigmoid(submodel, m_res):
+    """s(m) = sigmoid((m - x*)/w) of the drain criterion (x* = "...isolation lithium
+    trapping drain stoichiometry", w = "...drain width")."""
+    Domain = submodel.domain_Domain[1]
+    pref = submodel.phase_param.phase_prefactor
+    x_star = pybamm.Parameter(
+        f"{pref}{Domain} electrode isolation lithium trapping drain stoichiometry"
+    )
+    width = pybamm.Parameter(
+        f"{pref}{Domain} electrode isolation lithium trapping drain width"
+    )
+    return 1 / (1 + pybamm.exp(-(m_res - x_star) / width))

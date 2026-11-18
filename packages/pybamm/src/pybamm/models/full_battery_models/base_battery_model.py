@@ -410,6 +410,24 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 (pores tightest when Si is most swollen) and Li trapping in
                 near-isolated Si. A pure inventory sink: no current, no SEI
                 film, no porosity change. Can be a per-phase 2-tuple.
+                "residual lithiation" (secondary phase only): theta is scaled
+                by s(m) = sigmoid((m - x*)/w), m the residual lithiation
+                memory (cycle-minimum average stoichiometry, see "porosity
+                isolation residual lithiation"; tracked here without changing
+                the isolation rate), x* = "...isolation lithium trapping drain
+                stoichiometry", w = "...isolation lithium trapping drain
+                width": a window that drains the phase every cycle (m ~ 0)
+                empties particles on their way to isolation (no extra
+                trapping), one that never does (m >~ x*) loses them with
+                their swollen-state lithium (incomplete-delithiation
+                trapping, Rehnlund/Lindgren).
+                "residual lithiation history" (secondary phase only): as
+                "residual lithiation", but theta is scaled by a drain history
+                h instead of s(m), dh/dt = (s(m) - h) |I| / Q_h with Q_h =
+                "...isolation lithium trapping drain history charge [A.h]"
+                and h(0) = 1: the trapping fades over repeated drained cycles
+                (trapped lithium recovered progressively by deep discharges)
+                rather than at the first drain.
             * "active material expansion residual" : str
                 Can be "false" (default) or "true". When "true" and "loss of
                 active material" includes "porosity isolation" for a phase,
@@ -686,7 +704,12 @@ class BatteryModelOptions(pybamm.FuzzyDict):
                 "Paris + strain fatigue",
                 "Paris + strain fatigue (contraction)",
             ],
-            "isolation lithium trapping": ["false", "true"],
+            "isolation lithium trapping": [
+                "false",
+                "true",
+                "residual lithiation",
+                "residual lithiation history",
+            ],
             "active material expansion residual": ["false", "true"],
             "lithium plating": [
                 "none",
