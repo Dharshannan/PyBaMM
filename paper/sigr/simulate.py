@@ -18,6 +18,8 @@ Protocol:
 - On a solver failure, the chunk is retried at tolerances x10, x0.1, x100,
   x0.01 before the run stops.
 """
+import os
+
 import numpy as np
 import pybamm
 
@@ -69,6 +71,13 @@ OUTPUT_VARIABLES = [
     "Total lithium lost from particles [mol]",
     POROSITY,
 ] + CRACK_VARS + STRAIN_VARS
+# Optional diagnostic (SIGR_LAM_ROUTES=1): the per-route active-material volume-fraction rates, integrated over time
+# into dEps_<phase>_<route> (negative = loss); LAM_% per route = -100 dEps / eps_0. Off by default; routes absent
+# from the model (e.g. graphite reaction LAM, ablations) are skipped.
+LAM_ROUTE_VARS = {f"dEps_{ph}_{rt}": f"X-averaged negative electrode {pn}LAM rate from {rn} [s-1]"
+                  for ph, pn in (("si", "secondary "), ("gr", "primary "))
+                  for rt, rn in (("stress", "stress"), ("reaction", "reaction (beta_LAM_sei)"),
+                                 ("iso", "porosity isolation"))}
 
 MIN_VALID_CAP_AH = 0.10 * MODEL_CAPACITY_AH
 
@@ -141,12 +150,13 @@ class _Collector:
     SERIES = ("thr", "LAM_gr", "LAM_si", "LAM_pos", "Q_side", "Q_lli_lam_trap", "Q_lli_particles",
               "crack_length", "roughness", "Q_si_sei", "Q_si_sei_cracks", "strain_E", "dl_strain", "dl_total")
 
-    def __init__(self, cond, efc_basis_ah, dthr=0.1):
+    def __init__(self, cond, efc_basis_ah, dthr=0.1, extra_integrals=()):
+        self.int_vars = list(STRAIN_VARS) + list(extra_integrals)
         self.cond, self.efc_basis_ah, self.dthr = cond, efc_basis_ah, dthr
         self.age_cap, self.age_thr, self.age_porosity, self.age_cycle_thr = [], [], [], []
         self.rpt_cap, self.rpt_thr, self.curves, self.cyc_thr, self.cyc_sig = [], [], [], [], []
         self.series = {k: [] for k in self.SERIES}
-        self.integral = {name: 0.0 for name in STRAIN_VARS}
+        self.integral = {name: 0.0 for name in self.int_vars}
         self.next_thr = None
         self.initial_porosity = None
 
@@ -179,7 +189,7 @@ class _Collector:
         if self.initial_porosity is None:
             self.initial_porosity = float(sol[POROSITY].entries[0])
         cum = {}
-        for name in STRAIN_VARS:  # running time integrals, at full resolution
+        for name in self.int_vars:  # running time integrals, at full resolution
             y = np.asarray(sol[name].entries, dtype=float)
             cum[name] = self.integral[name] + np.concatenate([[0.0], np.cumsum(0.5 * (y[1:] + y[:-1]) * np.diff(t))])
             self.integral[name] = float(cum[name][-1])
@@ -208,8 +218,11 @@ class _Collector:
             Q_si_sei=col(CRACK_VARS[3], to_ah), Q_si_sei_cracks=col(CRACK_VARS[4], to_ah),
             strain_E=cum[STRAIN_VARS[0]][idx], dl_strain=cum[STRAIN_VARS[1]][idx], dl_total=cum[STRAIN_VARS[2]][idx],
         )
+        for k, name in LAM_ROUTE_VARS.items():
+            if name in cum:
+                new[k] = cum[name][idx]
         for k, v in new.items():
-            self.series[k].append(v)
+            self.series.setdefault(k, []).append(v)
 
     def efc_per_cycle(self):
         """EFC of the last ageing cycle (None before the first one)."""
@@ -236,9 +249,12 @@ def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, 
     options / params: overrides of MODEL_OPTIONS / V7 (e.g. for ablations). rpt_rest_min: a rest before every
     RPT C/20 discharge after formation (0, the paper protocol: the discharge follows the CV hold directly)."""
     model = pybamm.lithium_ion.DFN({**MODEL_OPTIONS, **(options or {})})
+    routes = ([v for v in LAM_ROUTE_VARS.values() if v in model.variables]
+              if os.environ.get("SIGR_LAM_ROUTES") == "1" else [])
+    output_variables = OUTPUT_VARIABLES + routes
     param = parameter_values(cond, data_dir, rate_basis_ah, p={**V7, **(params or {})})
     solver = pybamm.IDAKLUSolver(root_tol=SOLVER_TOL, atol=SOLVER_TOL, rtol=SOLVER_TOL,
-                                 output_variables=OUTPUT_VARIABLES)
+                                 output_variables=output_variables)
 
     def make_sim(experiment, this_solver):
         return pybamm.Simulation(model, parameter_values=param, experiment=experiment,
@@ -249,7 +265,7 @@ def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, 
         for attempt, mult in enumerate([1.0] + RETRY_TOL_MULTIPLIERS):
             tol = SOLVER_TOL * mult
             this_solver = solver if mult == 1.0 else pybamm.IDAKLUSolver(
-                root_tol=tol, atol=tol, rtol=tol, output_variables=OUTPUT_VARIABLES)
+                root_tol=tol, atol=tol, rtol=tol, output_variables=output_variables)
             try:
                 sol = make_sim(experiment, this_solver).solve(starting_solution=state)
                 if attempt:
@@ -281,7 +297,7 @@ def run(cond, data_dir, rate_basis_ah=RATE_BASIS_AH, efc_basis_ah=EFC_BASIS_AH, 
     log(f"{cond.label}: RPT cycle (at {RPT_TEMPERATURE_K - 273.15:.0f} degC): " + " | ".join(rpt))
     rpt_steps = at_rpt_temperature(rpt)
 
-    out = _Collector(cond, efc_basis_ah)
+    out = _Collector(cond, efc_basis_ah, extra_integrals=routes)
     # Three one-step cycles, so the formation RPT is placed at the end of its discharge.
     formation = pybamm.Experiment(list(at_rpt_temperature([f"Discharge at {RPT_RATE} until {LOWER_CUTOFF_V} V",
                                                            f"Charge at {RPT_RATE} until {UPPER_CUTOFF_V} V",
