@@ -18,6 +18,15 @@ def _finish(ax, xlabel=EFC_LABEL):
     ax.set_xlabel(xlabel)
 
 
+def soh_spread(ax, cond, data_dir, color="black", lw=0.8, label=None):
+    """Cell-to-cell range of the measured C/20 SoH (min-max over the paper cell and its repeats) as error bars."""
+    sp = data.load_soh_spread(cond, data_dir)
+    if sp is not None and len(sp):
+        ax.vlines(sp["efc"], sp["soh_min"], sp["soh_max"], color=color, lw=lw, zorder=5, label=label)
+        ax.plot(sp["efc"], sp["soh_min"], "_", color=color, ms=4, mew=lw, zorder=5)
+        ax.plot(sp["efc"], sp["soh_max"], "_", color=color, ms=4, mew=lw, zorder=5)
+
+
 def soh(ax, res, cond, data_dir):
     # full windows: the C/3 capacity on the C/20 reference (one denominator, as Wan2025 Fig. 2a); partial windows:
     # the C/3 window capacity relative to the first, which the window sets

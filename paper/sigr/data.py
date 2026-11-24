@@ -35,6 +35,16 @@ def load(cond, data_dir, name):
     return df[df["efc"] >= 0].reset_index(drop=True)
 
 
+def load_soh_spread(cond, data_dir):
+    """Cell-to-cell C/20 SoH range at each scored RPT, from same-condition repeat cells (<CELL>_soh_repeats.csv:
+    rpt, efc, soh_min, soh_max, n_cells, cells; built by refit_local/repeats/build_spread.py), or None."""
+    path = os.path.join(_folder(cond, data_dir), f"{cond.cell}_soh_repeats.csv")
+    if not os.path.exists(path):
+        return None
+    df = load(cond, data_dir, "soh_repeats")
+    return df[df["n_cells"] >= 2].reset_index(drop=True)
+
+
 def load_all(cond, data_dir):
     return {name: load(cond, data_dir, name)
             for name in ("capacity_fade", "LLI", "LAM_derived")}

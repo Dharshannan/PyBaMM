@@ -60,8 +60,9 @@ def data_overview(data_dir):
     cells = [Line2D([], [], color=CELL_COLOR[k], marker="o", ms=3.5, label=ablations.cond_tag(c))
              for k, c in CONDITIONS.items()]
     marks = [Line2D([], [], color="0.3", ls="none", marker="o", ms=3.5, label="C/20 RPT"),
-             Line2D([], [], color="0.3", ls="none", marker="o", ms=3.5, mfc="white", label="High-rate RPT (CELL064)"),
              Line2D([], [], color="0.3", ls=":", label="Knee")]
+    if any((data.load(c, data_dir, "capacity_fade").source != "C/20 RPT").any() for c in CONDITIONS.values()):
+        marks.insert(1, Line2D([], [], color="0.3", ls="none", marker="o", ms=3.5, mfc="white", label="High-rate RPT"))
     fig.legend(handles=cells + marks, loc="outside upper center", ncol=4, frameon=False)
     ax[1].legend(handles=[Line2D([], [], color="0.3", marker="s", ms=3, label="Si"),
                           Line2D([], [], color="0.3", marker="s", ms=3, ls="--", alpha=0.55, label="Graphite")],
@@ -89,14 +90,15 @@ def _arrow(ax, x0, y0, x1, y1):
 
 def _electrode(ax, sei, isolate=()):
     """Cartoon cross-section: graphite and Si particles in electrolyte, with SEI
-    of thickness `sei` (0-1) filling the pores; particles in `isolate` are cut off."""
+    of thickness `sei` (0-1) filling the pores; particles in `isolate` are cut off. The SEI on the silicon is drawn
+    about four times thicker than on the graphite (model at end of test: 0.45-0.63 um on Si, 0.04-0.25 um on Gr)."""
     ax.add_patch(Rectangle((0, 0), 1, 1, fc=C_EL, ec="none"))
     rng = np.random.default_rng(3)
     pts = [(0.12 + 0.19 * i + 0.04 * (j % 2), 0.15 + 0.21 * j) for j in range(4) for i in range(5)]
     for k, (x, y) in enumerate(pts):
         si = k in (2, 6, 8, 12, 17)
         r = (0.055 if si else 0.075) + 0.004 * rng.standard_normal()
-        ax.add_patch(Circle((x, y), r + 0.045 * sei, fc=C_SEI, ec="none", alpha=0.85))
+        ax.add_patch(Circle((x, y), r + (0.052 if si else 0.013) * sei, fc=C_SEI, ec="none", alpha=0.85))
         ax.add_patch(Circle((x, y), r, fc=C_SI if si else C_GR, ec="k", lw=0.4))
         if k in isolate:
             ax.add_patch(Circle((x, y), r, fc="none", ec=C_ISO, lw=1.4))
@@ -137,7 +139,7 @@ def schematic_mech1(results_dir, key="25deg_15-95_soc"):
     for eta, col, lab in ((20, C_SI, r"Si, $\omega$ = 20"), (10, C_GR, r"Graphite, $\omega$ = 10")):
         a1.plot(h, (1 - h) ** eta, color=col, lw=1.5, label=lab)
     a1.set_xlabel(r"Porosity headroom $h$ [-]")
-    a1.set_ylabel(r"Gate $g^\ast = (1-h)^\omega$ [-]")
+    a1.set_ylabel(r"Pore-closure function $g^\ast = (1-h)^\omega$ [-]")
     a1.invert_xaxis()
     a1.legend(loc="upper left")
     top = a1.secondary_xaxis("top", functions=(lambda hh: EPS_MIN + hh * (EPS0 - EPS_MIN),
@@ -150,12 +152,13 @@ def schematic_mech1(results_dir, key="25deg_15-95_soc"):
     res, _ = an.load(key, results_dir)
     e_age = an.efc(res, res["age_thr"])
     hh = np.clip((res["age_min_porosity"] - EPS_MIN) / (EPS0 - EPS_MIN), 0, 1)
-    gate = (1 - hh) ** 20
-    dose = np.cumsum(gate)
+    g_star = (1 - hh) ** 20
+    iso_factor = np.cumsum(g_star)
     m = an.life_mask(res)
     a2.plot(e_age, hh, color="#2c7fb8", lw=1.4, label=r"Headroom $h$")
-    a2.plot(e_age, gate, color=C_SI, lw=1.2, ls="--", label=r"Gate $g^\ast$")
-    a2.plot(e_age, dose / dose.max(), color="k", lw=1.2, ls="-.", label=r"Dose $\Gamma$ (normalised)")
+    a2.plot(e_age, g_star, color=C_SI, lw=1.2, ls="--", label=r"Pore-closure function $g^\ast$")
+    a2.plot(e_age, iso_factor / iso_factor.max(), color="k", lw=1.2, ls="-.",
+            label=r"Isolation factor $\Gamma$ (normalised)")
     a2.plot(an.efc(res, res["thr"])[m], res["LAM_si"][m] / 100, color=C_ISO, lw=1.5, label="Si LAM (fraction)")
     a2.set_xlabel(plots.EFC_LABEL)
     a2.set_ylabel("Normalised value [-]")
@@ -167,10 +170,10 @@ def schematic_mech1(results_dir, key="25deg_15-95_soc"):
     _box(a3, 0.0, 0.81, 1.0, 0.17, [("SEI growth (particle surfaces and crack faces)", 7.5),
                                     (r"reduces the porosity $\varepsilon$", 7.5)])
     _arrow(a3, 0.5, 0.81, 0.5, 0.745)
-    _box(a3, 0.0, 0.575, 1.0, 0.17, [(r"Gate $g^\ast = (1-h)^\omega$", 7.5),
-                                     ("(shut until the pores near their floor)", 7.5)])
+    _box(a3, 0.0, 0.575, 1.0, 0.17, [(r"Pore-closure function $g^\ast = (1-h)^\omega$", 7.5),
+                                     ("(close to 0 until the porosity nears its floor)", 7.5)])
     _arrow(a3, 0.5, 0.575, 0.5, 0.51)
-    _box(a3, 0.0, 0.34, 1.0, 0.17, [(r"Dose $\mathrm{d}\Gamma/\mathrm{d}t = g^\ast$", 7.5),
+    _box(a3, 0.0, 0.34, 1.0, 0.17, [(r"Isolation factor $\mathrm{d}\Gamma/\mathrm{d}t = g^\ast$", 7.5),
                                     (r"(after closure, $\Gamma \propto \Delta t$)", 7.5)])
     _arrow(a3, 0.5, 0.34, 0.5, 0.275)
     _box(a3, 0.0, 0.0, 1.0, 0.275, [
@@ -474,7 +477,7 @@ def graphical_abstract(data_dir, results_dir, key_v="25deg_full_soc", trim=0.01)
                                         (r"$\Lambda = 1 + 2\,\ell\,w_{cr}N_{cr}$", 8),
                                         (r"$\varepsilon = \varepsilon_0 - a\left[\Delta L_{\mathrm{SEI}}"
                                          r" + (\Lambda-1)\,L_{\mathrm{SEI,cr}}\right]$", 7.5)], fc=sei)
-    _box(ax, 0.585, 0.17, 0.19, 0.66, [("Pores close:", 8), ("the gate opens", 8),
+    _box(ax, 0.585, 0.17, 0.19, 0.66, [("Pores close:", 8), ("isolation starts", 8),
                                        (r"$h = \frac{\varepsilon-\varepsilon_{\min}}{\varepsilon_0-\varepsilon_{\min}}$", 8.5),
                                        (r"$g^\ast = (1-h)^{\omega}$", 8)], fc=iso)
     _box(ax, 0.82, 0.17, 0.175, 0.66, [("Si isolated with", 8), ("its lithium:", 8), ("capacity knee", 8),
@@ -485,7 +488,7 @@ def graphical_abstract(data_dir, results_dir, key_v="25deg_full_soc", trim=0.01)
     _arrow(ax, 0.268, 0.225, 0.3, 0.4)
     _arrow(ax, 0.548, 0.5, 0.578, 0.5)
     _arrow(ax, 0.783, 0.5, 0.813, 0.5)
-    fig.text(0.5, 0.985, "Two silicon cracking routes, one isolation gate", ha="center", va="top", fontsize=9,
+    fig.text(0.5, 0.985, "Two silicon cracking routes lead to porosity-driven isolation", ha="center", va="top", fontsize=9,
              fontweight="bold")
     fig.text(0.5, 0.947, "2.5 A h pouch cells: SiO–graphite anode (19 wt % SiO) | single-crystal NMC622 cathode",
              ha="center", va="top", fontsize=7.5, style="italic", color="0.25")

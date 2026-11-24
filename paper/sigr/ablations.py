@@ -107,7 +107,7 @@ ABLATION_LABEL = {"no_isolation": "No isolation (mechanism I off)",
                   "no_strain_cracking": "No strain cracking (route B off)",
                   "strain_cracking_no_temperature": "Route B without temperature dependence",
                   "no_li_trapping": r"No lithium trapping ($\theta$ = 0)",
-                  "gate_open": r"No gate ($g^*$ = 1, refitted on CELL064)"}
+                  "gate_open": r"No pore closure ($g^*$ = 1, refitted on CELL064)"}
 
 
 def figure(data_dir, out_dir, baseline_dir, keys=None):

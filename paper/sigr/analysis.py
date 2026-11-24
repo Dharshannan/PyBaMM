@@ -105,6 +105,22 @@ def rpt_gaps(res, cond, data_dir):
         gap_pp=lambda d: d.model_soh - d.real_soh)
 
 
+def rpt_band_gaps(res, cond, data_dir):
+    """rpt_gaps against the cell-to-cell band (min-max over the paper cell and its same-condition repeats,
+    data.load_soh_spread): band_gap_pp = 0 inside the band, else the signed distance to its nearest edge. RPTs
+    without repeat data keep the single-cell gap."""
+    g = rpt_gaps(res, cond, data_dir)
+    lo, hi = g["real_soh"].to_numpy(copy=True), g["real_soh"].to_numpy(copy=True)
+    sp = data.load_soh_spread(cond, data_dir)
+    if sp is not None:
+        for i, x in enumerate(g["efc"]):
+            j = np.flatnonzero(np.abs(sp["efc"].to_numpy() - x) < 0.5)
+            if len(j):
+                lo[i], hi[i] = sp["soh_min"].iloc[j[0]], sp["soh_max"].iloc[j[0]]
+    m = g["model_soh"].to_numpy()
+    return g.assign(soh_min=lo, soh_max=hi, band_gap_pp=np.where(m < lo, m - lo, np.where(m > hi, m - hi, 0.0)))
+
+
 def knee(res, cond, data_dir, onset_soh=91.0):
     """Model knee = steepest descent of the C/3 ageing SoH; also the SoH-91% crossing."""
     soh, e = ageing_soh(res), efc(res, res["age_thr"])
