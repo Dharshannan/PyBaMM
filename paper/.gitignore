@@ -54,3 +54,6 @@ sei_variants/figures.log
 # Si lithiation-OCP charge check (Supplementary): figures kept
 !charge_branch/figures/*.png
 !charge_branch/figures/*.pdf
+
+# Local copy of the plain-scientific-writing Claude skill (installed in ~/.claude/skills)
+writing_skill/
